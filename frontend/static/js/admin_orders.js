@@ -138,7 +138,8 @@ async function loadOrders() {
             url += '?' + params.join('&');
         }
 
-        orderList = await adminApiRequest(url, 'GET');
+        const data = await adminApiRequest(url, 'GET');
+        orderList = data.orders || data.list || [];
         renderOrderTable();
     } catch (error) {
         showToast(error.message || '加载订单列表失败');
@@ -155,7 +156,7 @@ function renderOrderTable() {
         const statusClass = getStatusClass(order.status);
         const statusName = getStatusName(order.status);
         const mealPeriodName = getMealPeriodName(order.meal_period);
-        const deliveryTypeName = order.delivery_type === 'takeout' ? '外带' : '堂食';
+        const deliveryTypeName = (order.dining_type === 'takeout' || order.dining_type === 'take_out') ? '外带' : '堂食';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -208,8 +209,8 @@ function viewOrderDetail(orderId) {
         itemEl.innerHTML = `
             <span>${item.dish_name}</span>
             <span>×${item.quantity}</span>
-            <span>${formatCurrency(item.price)}</span>
-            <span>${formatCurrency(item.price * item.quantity)}</span>
+            <span>${formatCurrency(item.unit_price || item.price)}</span>
+            <span>${formatCurrency(item.subtotal || (item.unit_price || item.price) * item.quantity)}</span>
         `;
         itemsContainer.appendChild(itemEl);
     });

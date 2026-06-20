@@ -19,7 +19,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadOrders() {
     try {
-        orderList = await apiRequest('/orders', 'GET');
+        const data = await apiRequest('/orders', 'GET');
+        orderList = data.orders || data.list || [];
         renderOrders();
     } catch (error) {
         showToast(error.message || '加载订单失败');
@@ -44,13 +45,13 @@ function renderOrders() {
         const statusClass = getStatusClass(order.status);
         const statusName = getStatusName(order.status);
         const mealPeriodName = getMealPeriodName(order.meal_period);
-        const deliveryTypeName = order.delivery_type === 'takeout' ? '外带' : '堂食';
+        const deliveryTypeName = (order.dining_type === 'takeout' || order.dining_type === 'take_out') ? '外带' : '堂食';
 
         const itemsHtml = order.items.map(item => `
             <div class="order-item">
                 <span>${item.dish_name}</span>
                 <span>×${item.quantity}</span>
-                <span>${formatCurrency(item.price)}</span>
+                <span>${formatCurrency(item.unit_price || item.price)}</span>
             </div>
         `).join('');
 

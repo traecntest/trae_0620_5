@@ -31,7 +31,7 @@ class OrderService:
             if not dish:
                 raise ValueError(f"菜品ID {item['dish_id']} 不存在")
             
-            unit_price = Decimal(str(item["price"]))
+            unit_price = dish.price
             quantity = item["quantity"]
             subtotal = unit_price * quantity
             total_amount += subtotal

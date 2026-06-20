@@ -248,8 +248,8 @@
         }
 
         function renderDishCard(dish) {
-            const emoji = getDishEmoji(dish.period);
-            const suitableTags = dish.suitable_tags || [];
+            const emoji = getDishEmoji(dish.category);
+            const suitableTags = dish.suitable_for || [];
             const tagsHtml = suitableTags.map(tag => 
                 `<span class="tag tag-suitable">${tag}</span>`
             ).join('');

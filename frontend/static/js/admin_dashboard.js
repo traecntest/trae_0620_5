@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadKanbanData() {
     try {
-        const data = await adminApiRequest('/admin/kanban', 'GET');
+        const data = await adminApiRequest('/admin/dashboard/stats', 'GET');
         renderKanbanCards(data);
     } catch (error) {
         showToast(error.message || '加载统计数据失败');
@@ -122,7 +122,7 @@ function renderKanbanCards(data) {
 
 async function loadHeatmapData() {
     try {
-        const data = await adminApiRequest('/admin/heatmap', 'GET');
+        const data = await adminApiRequest('/admin/dashboard/heatmap', 'GET');
         renderHeatmapChart(data);
     } catch (error) {
         showToast(error.message || '加载热力图数据失败');
@@ -135,10 +135,11 @@ function renderHeatmapChart(data) {
 
     heatmapChart = echarts.init(chartDom);
 
-    const hours = ['0时', '3时', '6时', '9时', '12时', '15时', '18时', '21时'];
-    const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-
-    const heatData = data.map(item => [item.hour, item.day, item.value]);
+    const hours = data.hours || ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', 
+                                  '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'];
+    const days = data.days || data.date_range || ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    
+    const heatData = data.data || data.echarts_data || [];
 
     const option = {
         tooltip: {
@@ -165,7 +166,7 @@ function renderHeatmapChart(data) {
         },
         visualMap: {
             min: 0,
-            max: Math.max(...data.map(d => d.value), 10),
+            max: Math.max(...heatData.map(d => d[2]), 10),
             calculable: true,
             orient: 'horizontal',
             left: 'center',
@@ -196,7 +197,7 @@ function renderHeatmapChart(data) {
 
 async function loadWeeklyTrendData() {
     try {
-        const data = await adminApiRequest('/admin/weekly-trend', 'GET');
+        const data = await adminApiRequest('/admin/dashboard/trend', 'GET');
         renderTrendChart(data);
     } catch (error) {
         showToast(error.message || '加载周趋势数据失败');
@@ -209,9 +210,9 @@ function renderTrendChart(data) {
 
     trendChart = echarts.init(chartDom);
 
-    const dates = data.map(item => item.date);
-    const orders = data.map(item => item.orders);
-    const revenue = data.map(item => item.revenue);
+    const dates = data.dates || (data.trend && data.trend.map(d => d.date)) || [];
+    const orders = data.orders || (data.trend && data.trend.map(d => d.orders)) || [];
+    const revenue = data.revenue || (data.trend && data.trend.map(d => d.revenue)) || [];
 
     const option = {
         tooltip: {

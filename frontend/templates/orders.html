@@ -93,7 +93,7 @@
         function renderOrderCard(order) {
             const statusClass = getStatusClass(order.status);
             const statusName = getStatusName(order.status);
-            const periodName = getMealPeriodName(order.period);
+            const periodName = getMealPeriodName(order.meal_period);
             const dishNames = order.items.map(item => item.dish_name).join('、');
             const orderDate = formatDate(order.created_at);
             
@@ -138,7 +138,7 @@
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="font-size: 24px; color: var(--text-secondary);">
-                                ${order.delivery_type === 'dine_in' ? '堂食' : '外带'}
+                                ${order.dining_type === 'dinein' || order.dining_type === 'dine_in' ? '堂食' : '外带'}
                             </span>
                             <span style="font-size: 32px; font-weight: 700; color: var(--accent-color);">
                                 ${formatCurrency(order.total_amount)}
