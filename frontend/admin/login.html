@@ -106,7 +106,7 @@
             const phone = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             try {
-                const data = await apiRequest('/auth/admin-login', 'POST', { phone, password }, false);
+                const data = await adminApiRequest('/auth/admin-login', 'POST', { phone, password }, false);
                 localStorage.setItem('admin_token', data.access_token);
                 localStorage.setItem('admin_info', JSON.stringify(data.user));
                 showToast('登录成功');

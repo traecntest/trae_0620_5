@@ -187,3 +187,82 @@ function logout() {
 function navigateTo(url) {
     window.location.href = url;
 }
+
+function getAdminToken() {
+    return localStorage.getItem('admin_token');
+}
+
+function setAdminToken(token) {
+    localStorage.setItem('admin_token', token);
+}
+
+function clearAdminToken() {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_info');
+}
+
+function getAdminInfo() {
+    const info = localStorage.getItem('admin_info');
+    return info ? JSON.parse(info) : null;
+}
+
+function setAdminInfo(info) {
+    localStorage.setItem('admin_info', JSON.stringify(info));
+}
+
+async function adminApiRequest(url, method = 'GET', data = null, includeAuth = true) {
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    
+    if (includeAuth) {
+        const token = getAdminToken();
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+    }
+    
+    const options = {
+        method,
+        headers
+    };
+    
+    if (data) {
+        options.body = JSON.stringify(data);
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}${url}`, options);
+        const result = await response.json();
+        
+        if (result.code !== 200) {
+            if (result.code === 401) {
+                clearAdminToken();
+                window.location.href = '/admin/login';
+            }
+            throw new Error(result.message || '请求失败');
+        }
+        
+        return result.data;
+    } catch (error) {
+        console.error('API请求错误:', error);
+        throw error;
+    }
+}
+
+function checkAdminAuth() {
+    const token = getAdminToken();
+    if (!token) {
+        window.location.href = '/admin/login';
+        return false;
+    }
+    return true;
+}
+
+function adminLogout() {
+    clearAdminToken();
+    showToast('已退出登录');
+    setTimeout(() => {
+        window.location.href = '/admin/login';
+    }, 1000);
+}
