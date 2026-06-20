@@ -103,15 +103,15 @@
     <script>
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
-            const username = document.getElementById('username').value;
+            const phone = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             try {
-                const data = await apiRequest('/auth/login', 'POST', { username, password }, false);
-                setAuthToken(data.access_token);
-                setUserInfo(data.user);
+                const data = await apiRequest('/auth/admin-login', 'POST', { phone, password }, false);
+                localStorage.setItem('admin_token', data.access_token);
+                localStorage.setItem('admin_info', JSON.stringify(data.user));
                 showToast('登录成功');
                 setTimeout(() => {
-                    window.location.href = 'dashboard.html';
+                    window.location.href = '/admin/dashboard';
                 }, 1000);
             } catch (error) {
                 showToast(error.message || '登录失败');
