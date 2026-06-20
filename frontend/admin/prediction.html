@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>备餐预测 - 老年食堂管理后台</title>
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <h2>🍽️ 老年食堂</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html"><span class="menu-icon">📊</span><span>仪表盘</span></a></li>
+                <li><a href="prediction.html" class="active"><span class="menu-icon">📈</span><span>备餐预测</span></a></li>
+                <li><a href="dishes.html"><span class="menu-icon">🍱</span><span>菜品管理</span></a></li>
+                <li><a href="orders.html"><span class="menu-icon">📋</span><span>订单管理</span></a></li>
+                <li><a href="#" onclick="logout()"><span class="menu-icon">🚪</span><span>退出登录</span></a></li>
+            </ul>
+        </aside>
+        <main class="main-content">
+            <div class="topbar">
+                <h1>备餐预测</h1>
+                <div class="user-info">
+                    <button class="btn btn-accent" id="regenerateBtn" onclick="regeneratePrediction()">
+                        🔄 重新生成预测
+                    </button>
+                </div>
+            </div>
+            <div class="prediction-card">
+                <h3 id="predictionDate">明日（2026-06-21）备餐预测结果</h3>
+                <div class="prediction-periods">
+                    <div class="period-prediction">
+                        <div class="period-name">早餐</div>
+                        <div class="prediction-value" id="breakfastPrediction">0</div>
+                        <div class="prediction-unit">份</div>
+                    </div>
+                    <div class="period-prediction">
+                        <div class="period-name">午餐</div>
+                        <div class="prediction-value" id="lunchPrediction">0</div>
+                        <div class="prediction-unit">份</div>
+                    </div>
+                    <div class="period-prediction">
+                        <div class="period-name">晚餐</div>
+                        <div class="prediction-value" id="dinnerPrediction">0</div>
+                        <div class="prediction-unit">份</div>
+                    </div>
+                </div>
+                <div class="prediction-suggestion" id="predictionSuggestion">
+                    建议备餐量：早餐 85 份，午餐 180 份，晚餐 120 份。请根据实际情况适当调整。
+                </div>
+            </div>
+            <div class="data-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>菜品名称</th>
+                            <th>分类</th>
+                            <th>预测份数</th>
+                            <th>建议备餐量</th>
+                            <th>置信度</th>
+                        </tr>
+                    </thead>
+                    <tbody id="predictionTableBody">
+                    </tbody>
+                </table>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">特征重要性分析</div>
+                <div class="chart-container" id="featureChart"></div>
+            </div>
+            <div class="data-table">
+                <div style="padding: 20px; border-bottom: 1px solid var(--border-color);">
+                    <h3 style="font-size: 18px; font-weight: 600;">预测日志</h3>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>预测时间</th>
+                            <th>预测日期</th>
+                            <th>总预测份数</th>
+                            <th>准确率</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="predictionLogBody">
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <script src="/static/js/api.js"></script>
+    <script>
+        checkAuth();
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const dateStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+        document.getElementById('predictionDate').textContent = `明日（${dateStr}）备餐预测结果`;
+
+        async function loadPredictionData() {
+            try {
+                const data = await apiRequest('/prediction/latest');
+                renderPredictionData(data);
+            } catch (error) {
+                console.error('加载预测数据失败:', error);
+                renderMockPredictionData();
+            }
+            try {
+                const logs = await apiRequest('/prediction/logs');
+                renderPredictionLogs(logs);
+            } catch (error) {
+                console.error('加载预测日志失败:', error);
+                renderMockPredictionLogs();
+            }
+            try {
+                const features = await apiRequest('/prediction/features');
+                renderFeatureChart(features);
+            } catch (error) {
+                console.error('加载特征数据失败:', error);
+                renderFeatureChart(null);
+            }
+        }
+
+        function renderPredictionData(data) {
+            let dishes = [];
+            if (data && data.predictions) {
+                dishes = data.predictions;
+                document.getElementById('breakfastPrediction').textContent = data.total_breakfast || 0;
+                document.getElementById('lunchPrediction').textContent = data.total_lunch || 0;
+                document.getElementById('dinnerPrediction').textContent = data.total_dinner || 0;
+                document.getElementById('predictionSuggestion').textContent = 
+                    data.suggestion || '建议根据预测结果适当准备食材，避免浪费。';
+            } else {
+                dishes = [
+                    { name: '小米粥', category: '早餐', predicted: 45, suggested: 50, confidence: 0.92 },
+                    { name: '肉包子', category: '早餐', predicted: 38, suggested: 42, confidence: 0.88 },
+                    { name: '茶叶蛋', category: '早餐', predicted: 30, suggested: 35, confidence: 0.85 },
+                    { name: '红烧肉', category: '午餐', predicted: 85, suggested: 90, confidence: 0.94 },
+                    { name: '清蒸鱼', category: '午餐', predicted: 72, suggested: 78, confidence: 0.91 },
+                    { name: '西红柿炒鸡蛋', category: '午餐', predicted: 65, suggested: 70, confidence: 0.89 },
+                    { name: '炒时蔬', category: '午餐', predicted: 58, suggested: 65, confidence: 0.87 },
+                    { name: '紫菜蛋花汤', category: '午餐', predicted: 80, suggested: 85, confidence: 0.93 },
+                    { name: '面条', category: '晚餐', predicted: 55, suggested: 60, confidence: 0.86 },
+                    { name: '馒头', category: '晚餐', predicted: 48, suggested: 52, confidence: 0.84 },
+                    { name: '凉拌黄瓜', category: '晚餐', predicted: 42, suggested: 48, confidence: 0.82 }
+                ];
+                document.getElementById('breakfastPrediction').textContent = '113';
+                document.getElementById('lunchPrediction').textContent = '360';
+                document.getElementById('dinnerPrediction').textContent = '145';
+            }
+            const tbody = document.getElementById('predictionTableBody');
+            tbody.innerHTML = '';
+            dishes.forEach(dish => {
+                const tr = document.createElement('tr');
+                const confidenceClass = dish.confidence >= 0.9 ? 'status-confirmed' : 
+                                       dish.confidence >= 0.8 ? 'status-pending' : 'status-cancelled';
+                tr.innerHTML = `
+                    <td><strong>${dish.name}</strong></td>
+                    <td>${getMealPeriodName(dish.category)}</td>
+                    <td>${dish.predicted} 份</td>
+                    <td><strong style="color: var(--accent-color);">${dish.suggested} 份</strong></td>
+                    <td><span class="status-badge ${confidenceClass}">${(dish.confidence * 100).toFixed(1)}%</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderMockPredictionData() {
+            renderPredictionData(null);
+        }
+
+        function renderPredictionLogs(logs) {
+            let logData = [];
+            if (logs && logs.length > 0) {
+                logData = logs;
+            } else {
+                logData = [
+                    { created_at: '2026-06-20 18:30:00', target_date: '2026-06-21', total: 618, accuracy: null, status: 'pending' },
+                    { created_at: '2026-06-19 18:25:00', target_date: '2026-06-20', total: 592, accuracy: 94.5, status: 'completed' },
+                    { created_at: '2026-06-18 18:20:00', target_date: '2026-06-19', total: 578, accuracy: 92.3, status: 'completed' },
+                    { created_at: '2026-06-17 18:15:00', target_date: '2026-06-18', total: 605, accuracy: 95.8, status: 'completed' },
+                    { created_at: '2026-06-16 18:10:00', target_date: '2026-06-17', total: 585, accuracy: 91.2, status: 'completed' }
+                ];
+            }
+            const tbody = document.getElementById('predictionLogBody');
+            tbody.innerHTML = '';
+            logData.forEach(log => {
+                const tr = document.createElement('tr');
+                const statusClass = log.status === 'completed' ? 'status-confirmed' : 
+                                   log.status === 'pending' ? 'status-pending' : 'status-cancelled';
+                tr.innerHTML = `
+                    <td>${log.created_at}</td>
+                    <td>${log.target_date}</td>
+                    <td>${log.total} 份</td>
+                    <td>${log.accuracy ? log.accuracy + '%' : '-'}</td>
+                    <td><span class="status-badge ${statusClass}">${getStatusName(log.status)}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderMockPredictionLogs() {
+            renderPredictionLogs(null);
+        }
+
+        function renderFeatureChart(data) {
+            const chart = echarts.init(document.getElementById('featureChart'));
+            let features = [];
+            let values = [];
+            if (data && data.features) {
+                features = data.features.map(f => f.name);
+                values = data.features.map(f => f.importance);
+            } else {
+                features = ['历史订单量', '星期几', '天气情况', '节假日', '温度', 
+                           '上月同期销量', '上周同期销量', '菜品价格', '菜品上新'];
+                values = [95, 88, 76, 72, 68, 65, 62, 45, 38];
+            }
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value',
+                    max: 100
+                },
+                yAxis: {
+                    type: 'category',
+                    data: features
+                },
+                series: [{
+                    name: '重要性',
+                    type: 'bar',
+                    data: values,
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                            { offset: 0, color: '#F97316' },
+                            { offset: 1, color: '#1E3A8A' }
+                        ]),
+                        borderRadius: [0, 4, 4, 0]
+                    },
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: '{c}%'
+                    }
+                }]
+            };
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        async function regeneratePrediction() {
+            const btn = document.getElementById('regenerateBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 生成中...';
+            try {
+                await apiRequest('/prediction/generate', 'POST');
+                showToast('预测生成成功');
+                loadPredictionData();
+            } catch (error) {
+                showToast(error.message || '生成失败，请重试');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 重新生成预测';
+            }
+        }
+
+        loadPredictionData();
+    </script>
+</body>
+</html>

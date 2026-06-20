@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>老年食堂 - 亲属代订</title>
+    <link rel="stylesheet" href="/static/css/elderly.css">
+</head>
+<body>
+    <main class="container">
+        <header style="margin-bottom: 24px;">
+            <h1>亲属代订</h1>
+        </header>
+
+        <section class="card" style="margin-bottom: 24px;">
+            <h3 style="margin-bottom: 16px;">选择代订老人</h3>
+            <div class="input-group" style="margin-bottom: 0;">
+                <select id="elderlySelect" name="elderlySelect">
+                    <option value="">请选择老人</option>
+                </select>
+            </div>
+            <div id="selectedElderlyInfo" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 2px solid var(--border-color);">
+                <div style="display: flex; align-items: center;">
+                    <div class="member-avatar" id="selectedAvatar" style="margin-right: 16px;"></div>
+                    <div>
+                        <div class="member-name" id="selectedName"></div>
+                        <div class="member-relation" id="selectedRelation"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <nav class="step-indicator">
+            <div class="step active">
+                <div class="step-number">1</div>
+                <div class="step-label">选菜</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-label">选时段</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-label">确认</div>
+            </div>
+        </nav>
+
+        <section class="period-tabs" id="periodTabs">
+            <div class="period-tab active" data-period="breakfast">早餐</div>
+            <div class="period-tab" data-period="lunch">午餐</div>
+            <div class="period-tab" data-period="dinner">晚餐</div>
+            <div class="period-tab" data-period="all">全部</div>
+        </section>
+
+        <section class="category-filter" id="categoryFilter">
+            <div class="category-chip active" data-category="all">全部</div>
+        </section>
+
+        <section id="dishList" style="margin-bottom: 180px;">
+        </section>
+
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <div class="empty-icon">🍽️</div>
+            <p class="empty-text">暂无菜品</p>
+        </div>
+    </main>
+
+    <button id="voiceBtn" class="voice-btn">🎤</button>
+
+    <div class="total-bar" id="totalBar" style="display: none;">
+        <div>
+            <span class="total-label">已选 <span id="totalCount">0</span> 份</span>
+            <div style="font-size: 32px; font-weight: 700; color: var(--accent-color); margin-top: 4px;">
+                合计：<span id="totalPrice">¥0.00</span>
+            </div>
+        </div>
+        <button id="nextStepBtn" class="btn btn-primary btn-lg" style="min-height: 72px;">
+            下一步
+        </button>
+    </div>
+
+    <nav class="bottom-nav">
+        <a href="/" class="nav-item">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-label">首页</span>
+        </a>
+        <a href="/order" class="nav-item">
+            <span class="nav-icon">🍽️</span>
+            <span class="nav-label">点餐</span>
+        </a>
+        <a href="/orders" class="nav-item">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">订单</span>
+        </a>
+        <a href="/family" class="nav-item active">
+            <span class="nav-icon">👨‍👩‍👧</span>
+            <span class="nav-label">亲属</span>
+        </a>
+    </nav>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/voice.js"></script>
+    <script>
+        const relationNames = {
+            'spouse': '配偶',
+            'son': '儿子',
+            'daughter': '女儿',
+            'grandson': '孙子',
+            'granddaughter': '孙女',
+            'brother': '兄弟',
+            'sister': '姐妹',
+            'other': '其他'
+        };
+
+        let currentPeriod = 'breakfast';
+        let currentCategory = 'all';
+        let familyMembers = [];
+        let selectedMemberId = null;
+        window.dishList = [];
+        window.currentCart = {
+            period: 'breakfast',
+            items: [],
+            for_family: true,
+            family_member_id: null
+        };
+
+        function loadFamilyMembers() {
+            const selectEl = document.getElementById('elderlySelect');
+            
+            apiRequest('/family/members', 'GET')
+                .then(data => {
+                    familyMembers = data.members || [];
+                    
+                    let optionsHtml = '<option value="">请选择老人</option>';
+                    familyMembers.forEach(member => {
+                        const relationName = relationNames[member.relation] || member.relation;
+                        optionsHtml += `<option value="${member.id}">${member.name || '未命名'} (${relationName})</option>`;
+                    });
+                    selectEl.innerHTML = optionsHtml;
+
+                    const savedMemberId = localStorage.getItem('selectedFamilyMember');
+                    if (savedMemberId && familyMembers.find(m => m.id == savedMemberId)) {
+                        selectEl.value = savedMemberId;
+                        updateSelectedMember(parseInt(savedMemberId));
+                    }
+                })
+                .catch(error => {
+                    showToast(error.message);
+                });
+        }
+
+        function updateSelectedMember(memberId) {
+            const member = familyMembers.find(m => m.id === memberId);
+            if (!member) return;
+
+            selectedMemberId = memberId;
+            window.currentCart.family_member_id = memberId;
+
+            const infoEl = document.getElementById('selectedElderlyInfo');
+            infoEl.style.display = 'block';
+
+            const relationName = relationNames[member.relation] || member.relation;
+            const nameInitial = member.name ? member.name.charAt(0) : '亲';
+
+            document.getElementById('selectedAvatar').textContent = nameInitial;
+            document.getElementById('selectedName').textContent = member.name || '未命名';
+            document.getElementById('selectedRelation').textContent = relationName + ' · ' + member.phone;
+        }
+
+        function loadDishes() {
+            const dishListEl = document.getElementById('dishList');
+            const emptyState = document.getElementById('emptyState');
+            
+            dishListEl.innerHTML = '<div style="text-align: center; padding: 40px;"><span class="loading"></span><p style="margin-top: 16px;">加载中...</p></div>';
+            emptyState.style.display = 'none';
+
+            let url = '/dishes';
+            if (currentPeriod !== 'all') {
+                url += `?period=${currentPeriod}`;
+            }
+
+            apiRequest(url, 'GET')
+                .then(data => {
+                    window.dishList = data.dishes || [];
+                    
+                    let filteredDishes = window.dishList;
+                    if (currentCategory !== 'all') {
+                        filteredDishes = window.dishList.filter(d => d.category === currentCategory);
+                    }
+
+                    if (filteredDishes.length === 0) {
+                        dishListEl.innerHTML = '';
+                        emptyState.style.display = 'block';
+                        return;
+                    }
+
+                    const categories = [...new Set(window.dishList.map(d => d.category))];
+                    renderCategoryFilter(categories);
+
+                    dishListEl.innerHTML = filteredDishes.map(dish => renderDishCard(dish)).join('');
+                    
+                    filteredDishes.forEach(dish => {
+                        const cartItem = window.currentCart.items.find(item => item.dish_id === dish.id);
+                        if (cartItem) {
+                            updateDishQuantity(dish.id, cartItem.quantity);
+                        }
+                    });
+
+                    attachDishEvents();
+                })
+                .catch(error => {
+                    showToast(error.message);
+                    dishListEl.innerHTML = '';
+                    emptyState.style.display = 'block';
+                });
+        }
+
+        function renderCategoryFilter(categories) {
+            const filterEl = document.getElementById('categoryFilter');
+            let html = '<div class="category-chip active" data-category="all">全部</div>';
+            
+            const categoryNames = {
+                'hot_dish': '热菜',
+                'cold_dish': '凉菜',
+                'soup': '汤品',
+                'staple': '主食',
+                'porridge': '粥品',
+                'dessert': '点心'
+            };
+            
+            categories.forEach(cat => {
+                const name = categoryNames[cat] || cat;
+                html += `<div class="category-chip" data-category="${cat}">${name}</div>`;
+            });
+            
+            filterEl.innerHTML = html;
+
+            filterEl.querySelectorAll('.category-chip').forEach(chip => {
+                chip.addEventListener('click', function() {
+                    filterEl.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+                    this.classList.add('active');
+                    currentCategory = this.dataset.category;
+                    loadDishes();
+                });
+            });
+        }
+
+        function renderDishCard(dish) {
+            const emoji = getDishEmoji(dish.period);
+            const suitableTags = dish.suitable_tags || [];
+            const tagsHtml = suitableTags.map(tag => 
+                `<span class="tag tag-suitable">${tag}</span>`
+            ).join('');
+
+            return `
+                <div class="dish-card" data-dish-id="${dish.id}">
+                    <div class="dish-image">${emoji}</div>
+                    <div class="dish-info">
+                        <div class="dish-name">${dish.name}</div>
+                        ${tagsHtml}
+                        <div class="dish-desc">${dish.description || ''}</div>
+                        <div class="dish-price">${formatCurrency(dish.price)}</div>
+                    </div>
+                    <div class="quantity-control">
+                        <button class="qty-btn" data-action="decrease" data-dish-id="${dish.id}" disabled>−</button>
+                        <span class="qty-display" data-dish-id="${dish.id}">0</span>
+                        <button class="qty-btn" data-action="increase" data-dish-id="${dish.id}">+</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function attachDishEvents() {
+            document.querySelectorAll('.qty-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const dishId = parseInt(this.dataset.dishId);
+                    const action = this.dataset.action;
+                    handleQuantityChange(dishId, action);
+                });
+            });
+        }
+
+        function handleQuantityChange(dishId, action) {
+            const dish = window.dishList.find(d => d.id === dishId);
+            if (!dish) return;
+
+            let cartItem = window.currentCart.items.find(item => item.dish_id === dishId);
+            
+            if (action === 'increase') {
+                if (cartItem) {
+                    cartItem.quantity++;
+                } else {
+                    cartItem = {
+                        dish_id: dish.id,
+                        name: dish.name,
+                        price: dish.price,
+                        quantity: 1,
+                        image: dish.image
+                    };
+                    window.currentCart.items.push(cartItem);
+                }
+            } else if (action === 'decrease' && cartItem) {
+                cartItem.quantity--;
+                if (cartItem.quantity <= 0) {
+                    window.currentCart.items = window.currentCart.items.filter(item => item.dish_id !== dishId);
+                }
+            }
+
+            updateDishQuantity(dishId, cartItem ? cartItem.quantity : 0);
+            updateCartDisplay();
+        }
+
+        function updateDishQuantity(dishId, quantity) {
+            const display = document.querySelector(`.qty-display[data-dish-id="${dishId}"]`);
+            const decreaseBtn = document.querySelector(`.qty-btn[data-action="decrease"][data-dish-id="${dishId}"]`);
+            
+            if (display) display.textContent = quantity;
+            if (decreaseBtn) decreaseBtn.disabled = quantity <= 0;
+
+            const card = document.querySelector(`.dish-card[data-dish-id="${dishId}"]`);
+            if (card) {
+                if (quantity > 0) {
+                    card.classList.add('selected');
+                } else {
+                    card.classList.remove('selected');
+                }
+            }
+        }
+
+        function updateCartDisplay() {
+            const totalCount = window.currentCart.items.reduce((sum, item) => sum + item.quantity, 0);
+            const totalPrice = window.currentCart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+            document.getElementById('totalCount').textContent = totalCount;
+            document.getElementById('totalPrice').textContent = formatCurrency(totalPrice);
+
+            const totalBar = document.getElementById('totalBar');
+            if (totalCount > 0) {
+                totalBar.style.display = 'flex';
+            } else {
+                totalBar.style.display = 'none';
+            }
+
+            const nextBtn = document.getElementById('nextStepBtn');
+            nextBtn.disabled = totalCount <= 0 || !selectedMemberId;
+        }
+
+        document.getElementById('elderlySelect').addEventListener('change', function() {
+            const memberId = this.value ? parseInt(this.value) : null;
+            if (memberId) {
+                updateSelectedMember(memberId);
+            } else {
+                selectedMemberId = null;
+                window.currentCart.family_member_id = null;
+                document.getElementById('selectedElderlyInfo').style.display = 'none';
+            }
+            updateCartDisplay();
+        });
+
+        document.querySelectorAll('.period-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                currentPeriod = this.dataset.period;
+                window.currentCart.period = currentPeriod === 'all' ? 'lunch' : currentPeriod;
+                currentCategory = 'all';
+                loadDishes();
+            });
+        });
+
+        document.getElementById('nextStepBtn').addEventListener('click', function() {
+            if (!selectedMemberId) {
+                showToast('请先选择代订的老人');
+                return;
+            }
+            
+            if (window.currentCart.items.length === 0) {
+                showToast('请先选择菜品');
+                return;
+            }
+            
+            localStorage.setItem('currentCart', JSON.stringify(window.currentCart));
+            navigateTo('/confirm');
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!checkAuth()) return;
+            
+            const savedCart = localStorage.getItem('currentCart');
+            if (savedCart) {
+                try {
+                    window.currentCart = JSON.parse(savedCart);
+                    if (!window.currentCart.items) {
+                        window.currentCart.items = [];
+                    }
+                    window.currentCart.for_family = true;
+                } catch (e) {
+                    window.currentCart = { period: 'breakfast', items: [], for_family: true, family_member_id: null };
+                }
+            }
+
+            currentPeriod = window.currentCart.period || 'breakfast';
+            document.querySelectorAll('.period-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.period === currentPeriod);
+            });
+
+            loadFamilyMembers();
+            loadDishes();
+            updateCartDisplay();
+            initVoiceButton();
+        });
+    </script>
+</body>
+</html>

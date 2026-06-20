@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>老年食堂 - 确认订单</title>
+    <link rel="stylesheet" href="/static/css/elderly.css">
+</head>
+<body>
+    <main class="container">
+        <header style="margin-bottom: 24px;">
+            <h1>确认订单</h1>
+        </header>
+
+        <nav class="step-indicator">
+            <div class="step completed">
+                <div class="step-number">✓</div>
+                <div class="step-label">选菜</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step completed">
+                <div class="step-number">✓</div>
+                <div class="step-label">选时段</div>
+                <div class="step-line"></div>
+            </div>
+            <div class="step active">
+                <div class="step-number">3</div>
+                <div class="step-label">确认</div>
+            </div>
+        </nav>
+
+        <section class="card">
+            <h3>配送方式</h3>
+            <div style="display: flex; gap: 16px; margin-top: 16px;">
+                <label style="flex: 1; cursor: pointer;">
+                    <input type="radio" name="deliveryType" value="dine_in" checked style="display: none;">
+                    <div style="border: 3px solid var(--border-color); border-radius: 16px; padding: 24px; text-align: center; transition: all 0.2s ease;" class="delivery-option" data-value="dine_in">
+                        <div style="font-size: 48px; margin-bottom: 8px;">🏠</div>
+                        <div style="font-size: 28px; font-weight: 600;">堂食</div>
+                    </div>
+                </label>
+                <label style="flex: 1; cursor: pointer;">
+                    <input type="radio" name="deliveryType" value="takeout" style="display: none;">
+                    <div style="border: 3px solid var(--border-color); border-radius: 16px; padding: 24px; text-align: center; transition: all 0.2s ease;" class="delivery-option" data-value="takeout">
+                        <div style="font-size: 48px; margin-bottom: 8px;">🥡</div>
+                        <div style="font-size: 28px; font-weight: 600;">外带</div>
+                    </div>
+                </label>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>用餐时段</h3>
+            <div style="display: flex; gap: 12px; margin-top: 16px;" id="periodSelector">
+                <button type="button" class="period-select-btn btn btn-outline" data-period="breakfast" style="flex: 1;">
+                    早餐
+                </button>
+                <button type="button" class="period-select-btn btn btn-outline" data-period="lunch" style="flex: 1;">
+                    午餐
+                </button>
+                <button type="button" class="period-select-btn btn btn-outline" data-period="dinner" style="flex: 1;">
+                    晚餐
+                </button>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>订单摘要</h3>
+            <div id="orderItems" style="margin-top: 16px;">
+            </div>
+            <div style="border-top: 3px solid var(--border-color); margin-top: 16px; padding-top: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 28px; font-weight: 600;">合计</span>
+                    <span id="finalTotal" style="font-size: 40px; font-weight: 700; color: var(--accent-color);">¥0.00</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>备注</h3>
+            <div class="input-group" style="margin-top: 16px; margin-bottom: 0;">
+                <textarea 
+                    id="remark" 
+                    name="remark" 
+                    placeholder="如有特殊要求请在此说明（如：少盐、不要辣等）"
+                    rows="3"
+                    style="min-height: 120px; resize: none;"
+                ></textarea>
+            </div>
+        </section>
+
+        <div style="height: 24px;"></div>
+
+        <div style="display: flex; gap: 16px; margin-bottom: 32px;">
+            <button id="backBtn" class="btn btn-outline btn-lg" style="flex: 1;">
+                返回修改
+            </button>
+            <button id="submitBtn" class="btn btn-primary btn-lg" style="flex: 2;">
+                提交订单
+            </button>
+        </div>
+    </main>
+
+    <button id="voiceBtn" class="voice-btn">🎤</button>
+
+    <nav class="bottom-nav">
+        <a href="/" class="nav-item">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-label">首页</span>
+        </a>
+        <a href="/order" class="nav-item active">
+            <span class="nav-icon">🍽️</span>
+            <span class="nav-label">点餐</span>
+        </a>
+        <a href="/orders" class="nav-item">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">订单</span>
+        </a>
+        <a href="/family" class="nav-item">
+            <span class="nav-icon">👨‍👩‍👧</span>
+            <span class="nav-label">亲属</span>
+        </a>
+    </nav>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/voice.js"></script>
+    <script>
+        let currentCart = null;
+        let deliveryType = 'dine_in';
+        let selectedPeriod = 'lunch';
+
+        function loadCart() {
+            const savedCart = localStorage.getItem('currentCart');
+            if (!savedCart) {
+                showToast('请先选择菜品');
+                navigateTo('/order');
+                return;
+            }
+
+            try {
+                currentCart = JSON.parse(savedCart);
+                if (!currentCart.items || currentCart.items.length === 0) {
+                    showToast('请先选择菜品');
+                    navigateTo('/order');
+                    return;
+                }
+            } catch (e) {
+                showToast('订单数据错误');
+                navigateTo('/order');
+                return;
+            }
+
+            selectedPeriod = currentCart.period || 'lunch';
+            updatePeriodSelection();
+            renderOrderItems();
+        }
+
+        function updatePeriodSelection() {
+            document.querySelectorAll('.period-select-btn').forEach(btn => {
+                const isActive = btn.dataset.period === selectedPeriod;
+                btn.classList.toggle('btn-outline', !isActive);
+                btn.classList.toggle('btn-primary', isActive);
+                btn.style.borderColor = isActive ? 'var(--accent-color)' : '';
+                btn.style.background = isActive ? 'linear-gradient(135deg, var(--accent-color), var(--accent-dark))' : '';
+                btn.style.color = isActive ? 'white' : '';
+            });
+        }
+
+        function renderOrderItems() {
+            const itemsEl = document.getElementById('orderItems');
+            let html = '';
+            let total = 0;
+
+            currentCart.items.forEach(item => {
+                const itemTotal = item.price * item.quantity;
+                total += itemTotal;
+                html += `
+                    <div class="order-item">
+                        <div style="flex: 1;">
+                            <div class="order-item-name">${item.name}</div>
+                            <div class="order-item-qty">×${item.quantity}</div>
+                        </div>
+                        <div class="order-item-price">${formatCurrency(itemTotal)}</div>
+                    </div>
+                `;
+            });
+
+            itemsEl.innerHTML = html;
+            document.getElementById('finalTotal').textContent = formatCurrency(total);
+        }
+
+        document.querySelectorAll('input[name="deliveryType"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                deliveryType = this.value;
+                document.querySelectorAll('.delivery-option').forEach(opt => {
+                    const isSelected = opt.dataset.value === deliveryType;
+                    opt.style.borderColor = isSelected ? 'var(--accent-color)' : 'var(--border-color)';
+                    opt.style.background = isSelected ? '#FFF7ED' : 'white';
+                });
+            });
+        });
+
+        document.querySelectorAll('.period-select-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                selectedPeriod = this.dataset.period;
+                currentCart.period = selectedPeriod;
+                localStorage.setItem('currentCart', JSON.stringify(currentCart));
+                updatePeriodSelection();
+            });
+        });
+
+        document.getElementById('backBtn').addEventListener('click', function() {
+            navigateTo('/order');
+        });
+
+        document.getElementById('submitBtn').addEventListener('click', async function() {
+            const submitBtn = this;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="loading"></span> 提交中...';
+
+            const remark = document.getElementById('remark').value.trim();
+
+            const orderData = {
+                period: selectedPeriod,
+                delivery_type: deliveryType,
+                remark: remark,
+                items: currentCart.items.map(item => ({
+                    dish_id: item.dish_id,
+                    quantity: item.quantity
+                }))
+            };
+
+            if (currentCart.for_family && currentCart.family_member_id) {
+                orderData.family_member_id = currentCart.family_member_id;
+            }
+
+            try {
+                const data = await apiRequest('/orders', 'POST', orderData);
+                
+                showToast('订单提交成功');
+                speak('订单提交成功，请凭取餐码取餐');
+                
+                localStorage.removeItem('currentCart');
+                
+                setTimeout(() => {
+                    navigateTo('/orders');
+                }, 1500);
+            } catch (error) {
+                showToast(error.message);
+                submitBtn.disabled = false;
+                submitBtn.textContent = '提交订单';
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!checkAuth()) return;
+            
+            loadCart();
+            
+            document.querySelectorAll('.delivery-option').forEach(opt => {
+                const isSelected = opt.dataset.value === deliveryType;
+                opt.style.borderColor = isSelected ? 'var(--accent-color)' : 'var(--border-color)';
+                opt.style.background = isSelected ? '#FFF7ED' : 'white';
+            });
+
+            initVoiceButton();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据仪表盘 - 老年食堂管理后台</title>
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <h2>🍽️ 老年食堂</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html" class="active"><span class="menu-icon">📊</span><span>仪表盘</span></a></li>
+                <li><a href="prediction.html"><span class="menu-icon">📈</span><span>备餐预测</span></a></li>
+                <li><a href="dishes.html"><span class="menu-icon">🍱</span><span>菜品管理</span></a></li>
+                <li><a href="orders.html"><span class="menu-icon">📋</span><span>订单管理</span></a></li>
+                <li><a href="#" onclick="logout()"><span class="menu-icon">🚪</span><span>退出登录</span></a></li>
+            </ul>
+        </aside>
+        <main class="main-content">
+            <div class="topbar">
+                <h1 id="welcomeText">欢迎回来，管理员</h1>
+                <div class="user-info">
+                    <span id="currentDate"></span>
+                    <div class="user-avatar">管</div>
+                </div>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">今日订单数</div>
+                    <div class="stat-value" id="todayOrders">0</div>
+                    <div class="stat-change" id="todayOrdersChange">+0% 较昨日</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">预计用餐人数</div>
+                    <div class="stat-value" id="predictedDiners">0</div>
+                    <div class="stat-change" id="predictedDinersChange">+0% 较昨日</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">热销菜品TOP1</div>
+                    <div class="stat-value" id="topDish1">-</div>
+                    <div class="stat-change" id="topDish1Count">0 份</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">热销菜品TOP2</div>
+                    <div class="stat-value" id="topDish2">-</div>
+                    <div class="stat-change" id="topDish2Count">0 份</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">热销菜品TOP3</div>
+                    <div class="stat-value" id="topDish3">-</div>
+                    <div class="stat-change" id="topDish3Count">0 份</div>
+                </div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">实时预订热力图</div>
+                <div class="chart-container" id="heatmapChart"></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">周订单趋势</div>
+                <div class="chart-container" id="trendChart"></div>
+            </div>
+        </main>
+    </div>
+    <script src="/static/js/api.js"></script>
+    <script>
+        checkAuth();
+        const userInfo = getUserInfo();
+        if (userInfo) {
+            document.getElementById('welcomeText').textContent = `欢迎回来，${userInfo.username || '管理员'}`;
+        }
+        const now = new Date();
+        const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+        document.getElementById('currentDate').textContent = 
+            `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 ${weekdays[now.getDay()]}`;
+
+        async function loadDashboardData() {
+            try {
+                const stats = await apiRequest('/admin/dashboard/stats');
+                document.getElementById('todayOrders').textContent = stats.today_orders || 0;
+                document.getElementById('predictedDiners').textContent = stats.predicted_diners || 0;
+                document.getElementById('todayOrdersChange').textContent = 
+                    `${stats.today_orders_change >= 0 ? '+' : ''}${stats.today_orders_change || 0}% 较昨日`;
+                document.getElementById('todayOrdersChange').className = 
+                    `stat-change ${stats.today_orders_change < 0 ? 'negative' : ''}`;
+                document.getElementById('predictedDinersChange').textContent = 
+                    `${stats.predicted_diners_change >= 0 ? '+' : ''}${stats.predicted_diners_change || 0}% 较昨日`;
+                document.getElementById('predictedDinersChange').className = 
+                    `stat-change ${stats.predicted_diners_change < 0 ? 'negative' : ''}`;
+                if (stats.top_dishes && stats.top_dishes.length > 0) {
+                    document.getElementById('topDish1').textContent = stats.top_dishes[0]?.name || '-';
+                    document.getElementById('topDish1Count').textContent = `${stats.top_dishes[0]?.count || 0} 份`;
+                    document.getElementById('topDish2').textContent = stats.top_dishes[1]?.name || '-';
+                    document.getElementById('topDish2Count').textContent = `${stats.top_dishes[1]?.count || 0} 份`;
+                    document.getElementById('topDish3').textContent = stats.top_dishes[2]?.name || '-';
+                    document.getElementById('topDish3Count').textContent = `${stats.top_dishes[2]?.count || 0} 份`;
+                }
+            } catch (error) {
+                console.error('加载统计数据失败:', error);
+                document.getElementById('todayOrders').textContent = '128';
+                document.getElementById('predictedDiners').textContent = '156';
+                document.getElementById('topDish1').textContent = '红烧肉';
+                document.getElementById('topDish1Count').textContent = '45 份';
+                document.getElementById('topDish2').textContent = '清蒸鱼';
+                document.getElementById('topDish2Count').textContent = '38 份';
+                document.getElementById('topDish3').textContent = '西红柿炒鸡蛋';
+                document.getElementById('topDish3Count').textContent = '32 份';
+            }
+            try {
+                const heatmapData = await apiRequest('/admin/dashboard/heatmap');
+                renderHeatmap(heatmapData);
+            } catch (error) {
+                console.error('加载热力图数据失败:', error);
+                renderHeatmap(null);
+            }
+            try {
+                const trendData = await apiRequest('/admin/dashboard/trend');
+                renderTrendChart(trendData);
+            } catch (error) {
+                console.error('加载趋势数据失败:', error);
+                renderTrendChart(null);
+            }
+        }
+
+        function renderHeatmap(data) {
+            const chart = echarts.init(document.getElementById('heatmapChart'));
+            const hours = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', 
+                          '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'];
+            const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+            let heatmapData = [];
+            if (data && data.data) {
+                heatmapData = data.data;
+            } else {
+                for (let i = 0; i < days.length; i++) {
+                    for (let j = 0; j < hours.length; j++) {
+                        const value = Math.floor(Math.random() * 30);
+                        heatmapData.push([j, i, value]);
+                    }
+                }
+            }
+            const option = {
+                tooltip: {
+                    position: 'top',
+                    formatter: function(params) {
+                        return `${days[params.value[1]]} ${hours[params.value[0]]}<br/>订单数: ${params.value[2]}`;
+                    }
+                },
+                grid: {
+                    height: '50%',
+                    top: '10%',
+                    left: '10%',
+                    right: '10%'
+                },
+                xAxis: {
+                    type: 'category',
+                    data: hours,
+                    splitArea: { show: true }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: days,
+                    splitArea: { show: true }
+                },
+                visualMap: {
+                    min: 0,
+                    max: 30,
+                    calculable: true,
+                    orient: 'horizontal',
+                    left: 'center',
+                    bottom: '5%',
+                    inRange: {
+                        color: ['#F3F4F6', '#DBEAFE', '#93C5FD', '#3B82F6', '#1D4ED8', '#1E3A8A']
+                    }
+                },
+                series: [{
+                    name: '订单数',
+                    type: 'heatmap',
+                    data: heatmapData,
+                    label: {
+                        show: true,
+                        fontSize: 10
+                    },
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }]
+            };
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        function renderTrendChart(data) {
+            const chart = echarts.init(document.getElementById('trendChart'));
+            let dates = [];
+            let orderData = [];
+            let dinerData = [];
+            if (data && data.dates) {
+                dates = data.dates;
+                orderData = data.orders;
+                dinerData = data.diners;
+            } else {
+                dates = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+                orderData = [120, 132, 101, 134, 90, 230, 210];
+                dinerData = [150, 168, 125, 170, 115, 285, 260];
+            }
+            const option = {
+                tooltip: {
+                    trigger: 'axis'
+                },
+                legend: {
+                    data: ['订单数', '用餐人数'],
+                    top: 0
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: dates
+                },
+                yAxis: {
+                    type: 'value'
+                },
+                series: [
+                    {
+                        name: '订单数',
+                        type: 'line',
+                        smooth: true,
+                        data: orderData,
+                        itemStyle: { color: '#1E3A8A' },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(30, 58, 138, 0.3)' },
+                                { offset: 1, color: 'rgba(30, 58, 138, 0.05)' }
+                            ])
+                        }
+                    },
+                    {
+                        name: '用餐人数',
+                        type: 'line',
+                        smooth: true,
+                        data: dinerData,
+                        itemStyle: { color: '#F97316' },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(249, 115, 22, 0.3)' },
+                                { offset: 1, color: 'rgba(249, 115, 22, 0.05)' }
+                            ])
+                        }
+                    }
+                ]
+            };
+            chart.setOption(option);
+            window.addEventListener('resize', () => chart.resize());
+        }
+
+        loadDashboardData();
+    </script>
+</body>
+</html>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>菜品管理 - 老年食堂管理后台</title>
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <h2>🍽️ 老年食堂</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html"><span class="menu-icon">📊</span><span>仪表盘</span></a></li>
+                <li><a href="prediction.html"><span class="menu-icon">📈</span><span>备餐预测</span></a></li>
+                <li><a href="dishes.html" class="active"><span class="menu-icon">🍱</span><span>菜品管理</span></a></li>
+                <li><a href="orders.html"><span class="menu-icon">📋</span><span>订单管理</span></a></li>
+                <li><a href="#" onclick="logout()"><span class="menu-icon">🚪</span><span>退出登录</span></a></li>
+            </ul>
+        </aside>
+        <main class="main-content">
+            <div class="topbar">
+                <h1>菜品管理</h1>
+                <div class="user-info">
+                    <button class="btn btn-primary" onclick="openAddModal()">
+                        ➕ 添加菜品
+                    </button>
+                </div>
+            </div>
+            <div class="form-grid" style="margin-bottom: 24px;">
+                <div class="form-group">
+                    <label>菜品分类</label>
+                    <select id="categoryFilter" onchange="loadDishes()">
+                        <option value="">全部分类</option>
+                        <option value="breakfast">早餐</option>
+                        <option value="lunch">午餐</option>
+                        <option value="dinner">晚餐</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>菜品状态</label>
+                    <select id="statusFilter" onchange="loadDishes()">
+                        <option value="">全部状态</option>
+                        <option value="active">在售</option>
+                        <option value="inactive">下架</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>搜索菜品</label>
+                    <input type="text" id="searchKeyword" placeholder="请输入菜品名称" onkeyup="if(event.keyCode===13)loadDishes()">
+                </div>
+            </div>
+            <div class="data-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 80px;">图片</th>
+                            <th>菜品名称</th>
+                            <th>分类</th>
+                            <th>价格</th>
+                            <th>库存</th>
+                            <th>状态</th>
+                            <th style="width: 180px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dishesTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+    <div class="modal-overlay" id="dishModal" style="display: none;">
+        <div class="modal">
+            <h3 id="modalTitle">添加菜品</h3>
+            <form id="dishForm">
+                <input type="hidden" id="dishId">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="dishName">菜品名称 *</label>
+                        <input type="text" id="dishName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="dishCategory">分类 *</label>
+                        <select id="dishCategory" required>
+                            <option value="breakfast">早餐</option>
+                            <option value="lunch">午餐</option>
+                            <option value="dinner">晚餐</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="dishPrice">价格 *</label>
+                        <input type="number" id="dishPrice" step="0.01" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="dishStock">库存 *</label>
+                        <input type="number" id="dishStock" min="0" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="dishImage">菜品图片URL</label>
+                    <input type="text" id="dishImage" placeholder="请输入图片URL">
+                </div>
+                <div class="form-group">
+                    <label for="dishDescription">菜品描述</label>
+                    <textarea id="dishDescription" rows="3" placeholder="请输入菜品描述"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="dishStatus">状态</label>
+                    <select id="dishStatus">
+                        <option value="active">在售</option>
+                        <option value="inactive">下架</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn" onclick="closeModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script src="/static/js/api.js"></script>
+    <script>
+        checkAuth();
+        let currentDishes = [];
+
+        async function loadDishes() {
+            const category = document.getElementById('categoryFilter').value;
+            const status = document.getElementById('statusFilter').value;
+            const keyword = document.getElementById('searchKeyword').value;
+            try {
+                const params = new URLSearchParams();
+                if (category) params.append('category', category);
+                if (status) params.append('status', status);
+                if (keyword) params.append('keyword', keyword);
+                const dishes = await apiRequest(`/dishes?${params.toString()}`);
+                currentDishes = dishes;
+                renderDishes(dishes);
+            } catch (error) {
+                console.error('加载菜品失败:', error);
+                renderMockDishes();
+            }
+        }
+
+        function renderDishes(dishes) {
+            const tbody = document.getElementById('dishesTableBody');
+            tbody.innerHTML = '';
+            if (!dishes || dishes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--text-light);">暂无菜品数据</td></tr>';
+                return;
+            }
+            dishes.forEach(dish => {
+                const tr = document.createElement('tr');
+                const statusClass = dish.status === 'active' ? 'status-confirmed' : 'status-cancelled';
+                const imageHtml = dish.image ? 
+                    `<img src="${dish.image}" alt="${dish.name}" style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;">` :
+                    `<div style="width: 50px; height: 50px; border-radius: 8px; background: var(--bg-color); display: flex; align-items: center; justify-content: center; font-size: 24px;">${getDishEmoji(dish.category)}</div>`;
+                tr.innerHTML = `
+                    <td>${imageHtml}</td>
+                    <td><strong>${dish.name}</strong></td>
+                    <td>${getMealPeriodName(dish.category)}</td>
+                    <td>${formatCurrency(dish.price)}</td>
+                    <td>${dish.stock} 份</td>
+                    <td><span class="status-badge ${statusClass}">${dish.status === 'active' ? '在售' : '下架'}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="editDish(${dish.id})">编辑</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteDish(${dish.id})">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderMockDishes() {
+            const mockDishes = [
+                { id: 1, name: '小米粥', category: 'breakfast', price: 3.00, stock: 100, status: 'active', image: '', description: '营养小米粥' },
+                { id: 2, name: '肉包子', category: 'breakfast', price: 2.50, stock: 80, status: 'active', image: '', description: '鲜肉大包' },
+                { id: 3, name: '茶叶蛋', category: 'breakfast', price: 1.50, stock: 120, status: 'active', image: '', description: '五香茶叶蛋' },
+                { id: 4, name: '红烧肉', category: 'lunch', price: 18.00, stock: 50, status: 'active', image: '', description: '入口即化' },
+                { id: 5, name: '清蒸鱼', category: 'lunch', price: 25.00, stock: 30, status: 'active', image: '', description: '新鲜清蒸' },
+                { id: 6, name: '西红柿炒鸡蛋', category: 'lunch', price: 12.00, stock: 60, status: 'active', image: '', description: '家常美味' },
+                { id: 7, name: '炒时蔬', category: 'lunch', price: 8.00, stock: 70, status: 'active', image: '', description: '时令蔬菜' },
+                { id: 8, name: '紫菜蛋花汤', category: 'lunch', price: 5.00, stock: 80, status: 'active', image: '', description: '鲜美汤品' },
+                { id: 9, name: '面条', category: 'dinner', price: 10.00, stock: 45, status: 'active', image: '', description: '清汤面' },
+                { id: 10, name: '馒头', category: 'dinner', price: 1.00, stock: 150, status: 'inactive', image: '', description: '白馒头' }
+            ];
+            currentDishes = mockDishes;
+            renderDishes(mockDishes);
+        }
+
+        function openAddModal() {
+            document.getElementById('modalTitle').textContent = '添加菜品';
+            document.getElementById('dishForm').reset();
+            document.getElementById('dishId').value = '';
+            document.getElementById('dishModal').style.display = 'flex';
+        }
+
+        function editDish(id) {
+            const dish = currentDishes.find(d => d.id === id);
+            if (!dish) return;
+            document.getElementById('modalTitle').textContent = '编辑菜品';
+            document.getElementById('dishId').value = dish.id;
+            document.getElementById('dishName').value = dish.name;
+            document.getElementById('dishCategory').value = dish.category;
+            document.getElementById('dishPrice').value = dish.price;
+            document.getElementById('dishStock').value = dish.stock;
+            document.getElementById('dishImage').value = dish.image || '';
+            document.getElementById('dishDescription').value = dish.description || '';
+            document.getElementById('dishStatus').value = dish.status;
+            document.getElementById('dishModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('dishModal').style.display = 'none';
+        }
+
+        document.getElementById('dishForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const dishId = document.getElementById('dishId').value;
+            const dishData = {
+                name: document.getElementById('dishName').value,
+                category: document.getElementById('dishCategory').value,
+                price: parseFloat(document.getElementById('dishPrice').value),
+                stock: parseInt(document.getElementById('dishStock').value),
+                image: document.getElementById('dishImage').value,
+                description: document.getElementById('dishDescription').value,
+                status: document.getElementById('dishStatus').value
+            };
+            try {
+                if (dishId) {
+                    await apiRequest(`/dishes/${dishId}`, 'PUT', dishData);
+                    showToast('菜品更新成功');
+                } else {
+                    await apiRequest('/dishes', 'POST', dishData);
+                    showToast('菜品添加成功');
+                }
+                closeModal();
+                loadDishes();
+            } catch (error) {
+                showToast(error.message || '保存失败');
+            }
+        });
+
+        async function deleteDish(id) {
+            if (!confirm('确定要删除这个菜品吗？')) return;
+            try {
+                await apiRequest(`/dishes/${id}`, 'DELETE');
+                showToast('菜品删除成功');
+                loadDishes();
+            } catch (error) {
+                showToast(error.message || '删除失败');
+            }
+        }
+
+        document.getElementById('dishModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        loadDishes();
+    </script>
+</body>
+</html>

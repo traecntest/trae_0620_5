@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>老年食堂 - 我的订单</title>
+    <link rel="stylesheet" href="/static/css/elderly.css">
+</head>
+<body>
+    <main class="container">
+        <header style="margin-bottom: 24px;">
+            <h1>我的订单</h1>
+        </header>
+
+        <section class="period-tabs" id="statusFilter">
+            <div class="period-tab active" data-status="all">全部</div>
+            <div class="period-tab" data-status="pending">待取餐</div>
+            <div class="period-tab" data-status="completed">已完成</div>
+            <div class="period-tab" data-status="cancelled">已取消</div>
+        </section>
+
+        <section id="orderList">
+        </section>
+
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <div class="empty-icon">📋</div>
+            <p class="empty-text">暂无订单</p>
+            <button class="btn btn-primary btn-lg" style="margin-top: 24px;" onclick="navigateTo('/order')">
+                去点餐
+            </button>
+        </div>
+    </main>
+
+    <button id="voiceBtn" class="voice-btn">🎤</button>
+
+    <nav class="bottom-nav">
+        <a href="/" class="nav-item">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-label">首页</span>
+        </a>
+        <a href="/order" class="nav-item">
+            <span class="nav-icon">🍽️</span>
+            <span class="nav-label">点餐</span>
+        </a>
+        <a href="/orders" class="nav-item active">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">订单</span>
+        </a>
+        <a href="/family" class="nav-item">
+            <span class="nav-icon">👨‍👩‍👧</span>
+            <span class="nav-label">亲属</span>
+        </a>
+    </nav>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/voice.js"></script>
+    <script>
+        let currentStatus = 'all';
+        let orders = [];
+
+        function loadOrders() {
+            const orderListEl = document.getElementById('orderList');
+            const emptyState = document.getElementById('emptyState');
+            
+            orderListEl.innerHTML = '<div style="text-align: center; padding: 40px;"><span class="loading"></span><p style="margin-top: 16px;">加载中...</p></div>';
+            emptyState.style.display = 'none';
+
+            apiRequest('/orders', 'GET')
+                .then(data => {
+                    orders = data.orders || [];
+                    
+                    let filteredOrders = orders;
+                    if (currentStatus !== 'all') {
+                        filteredOrders = orders.filter(o => o.status === currentStatus);
+                    }
+
+                    if (filteredOrders.length === 0) {
+                        orderListEl.innerHTML = '';
+                        emptyState.style.display = 'block';
+                        return;
+                    }
+
+                    orderListEl.innerHTML = filteredOrders.map(order => renderOrderCard(order)).join('');
+                    attachOrderEvents();
+                })
+                .catch(error => {
+                    showToast(error.message);
+                    orderListEl.innerHTML = '';
+                    emptyState.style.display = 'block';
+                });
+        }
+
+        function renderOrderCard(order) {
+            const statusClass = getStatusClass(order.status);
+            const statusName = getStatusName(order.status);
+            const periodName = getMealPeriodName(order.period);
+            const dishNames = order.items.map(item => item.dish_name).join('、');
+            const orderDate = formatDate(order.created_at);
+            
+            let pickupCodeHtml = '';
+            if (order.pickup_code && (order.status === 'pending' || order.status === 'confirmed')) {
+                pickupCodeHtml = `
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 2px solid var(--border-color);">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 24px; color: var(--text-secondary);">取餐码</span>
+                            <span style="font-size: 48px; font-weight: 900; color: var(--accent-color); letter-spacing: 4px;">${order.pickup_code}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            let cancelBtnHtml = '';
+            if (order.status === 'pending' || order.status === 'confirmed') {
+                cancelBtnHtml = `
+                    <button class="btn btn-outline" style="min-height: 48px; font-size: 22px; padding: 8px 20px; margin-top: 16px;" data-order-id="${order.id}" data-action="cancel">
+                        取消订单
+                    </button>
+                `;
+            }
+
+            return `
+                <div class="card" data-order-id="${order.id}">
+                    <div class="card-header">
+                        <div>
+                            <div style="font-size: 24px; color: var(--text-secondary); margin-bottom: 4px;">
+                                订单号：${order.order_no}
+                            </div>
+                            <div style="font-size: 24px; color: var(--text-secondary);">
+                                ${orderDate} ${periodName}
+                            </div>
+                        </div>
+                        <span class="status-badge ${statusClass}">${statusName}</span>
+                    </div>
+                    
+                    <div style="margin-bottom: 12px;">
+                        <div style="font-size: 26px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">
+                            ${dishNames}
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 24px; color: var(--text-secondary);">
+                                ${order.delivery_type === 'dine_in' ? '堂食' : '外带'}
+                            </span>
+                            <span style="font-size: 32px; font-weight: 700; color: var(--accent-color);">
+                                ${formatCurrency(order.total_amount)}
+                            </span>
+                        </div>
+                    </div>
+
+                    ${pickupCodeHtml}
+                    ${cancelBtnHtml}
+                </div>
+            `;
+        }
+
+        function attachOrderEvents() {
+            document.querySelectorAll('[data-action="cancel"]').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const orderId = this.dataset.orderId;
+                    
+                    if (!confirm('确定要取消这个订单吗？')) {
+                        return;
+                    }
+
+                    try {
+                        await apiRequest(`/orders/${orderId}/cancel`, 'PUT');
+                        showToast('订单已取消');
+                        loadOrders();
+                    } catch (error) {
+                        showToast(error.message);
+                    }
+                });
+            });
+        }
+
+        document.querySelectorAll('#statusFilter .period-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('#statusFilter .period-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                currentStatus = this.dataset.status;
+                loadOrders();
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!checkAuth()) return;
+            
+            loadOrders();
+            initVoiceButton();
+        });
+    </script>
+</body>
+</html>

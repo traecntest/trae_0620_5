@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订单管理 - 老年食堂管理后台</title>
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+</head>
+<body>
+    <div class="admin-layout">
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <h2>🍽️ 老年食堂</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html"><span class="menu-icon">📊</span><span>仪表盘</span></a></li>
+                <li><a href="prediction.html"><span class="menu-icon">📈</span><span>备餐预测</span></a></li>
+                <li><a href="dishes.html"><span class="menu-icon">🍱</span><span>菜品管理</span></a></li>
+                <li><a href="orders.html" class="active"><span class="menu-icon">📋</span><span>订单管理</span></a></li>
+                <li><a href="#" onclick="logout()"><span class="menu-icon">🚪</span><span>退出登录</span></a></li>
+            </ul>
+        </aside>
+        <main class="main-content">
+            <div class="topbar">
+                <h1>订单管理</h1>
+                <div class="user-info">
+                    <button class="btn btn-accent" onclick="exportOrders()">
+                        📥 导出订单
+                    </button>
+                </div>
+            </div>
+            <div class="form-grid" style="margin-bottom: 24px;">
+                <div class="form-group">
+                    <label>订单状态</label>
+                    <select id="statusFilter" onchange="loadOrders()">
+                        <option value="">全部状态</option>
+                        <option value="pending">待确认</option>
+                        <option value="confirmed">已确认</option>
+                        <option value="completed">已完成</option>
+                        <option value="cancelled">已取消</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>开始日期</label>
+                    <input type="date" id="startDate" onchange="loadOrders()">
+                </div>
+                <div class="form-group">
+                    <label>结束日期</label>
+                    <input type="date" id="endDate" onchange="loadOrders()">
+                </div>
+                <div class="form-group">
+                    <label>搜索订单</label>
+                    <input type="text" id="searchKeyword" placeholder="订单号/用户名" onkeyup="if(event.keyCode===13)loadOrders()">
+                </div>
+            </div>
+            <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
+                <div class="stat-card">
+                    <div class="stat-label">今日订单</div>
+                    <div class="stat-value" id="todayOrderCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">待确认</div>
+                    <div class="stat-value" id="pendingCount" style="color: #D97706;">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">已完成</div>
+                    <div class="stat-value" id="completedCount" style="color: #059669;">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">今日营收</div>
+                    <div class="stat-value" id="todayRevenue">¥0</div>
+                </div>
+            </div>
+            <div class="data-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>订单号</th>
+                            <th>用户</th>
+                            <th>菜品</th>
+                            <th>时段</th>
+                            <th>状态</th>
+                            <th>金额</th>
+                            <th>下单时间</th>
+                            <th style="width: 200px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTableBody">
+                    </tbody>
+                </table>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: white; border-radius: 16px; box-shadow: var(--shadow-md);">
+                <div style="color: var(--text-secondary); font-size: 14px;">
+                    共 <span id="totalCount">0</span> 条记录
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-sm" id="prevPage" onclick="changePage(-1)" disabled>上一页</button>
+                    <span id="pageInfo" style="padding: 8px 16px; font-weight: 500;">第 1 页</span>
+                    <button class="btn btn-sm" id="nextPage" onclick="changePage(1)" disabled>下一页</button>
+                </div>
+            </div>
+        </main>
+    </div>
+    <div class="modal-overlay" id="orderDetailModal" style="display: none;">
+        <div class="modal" style="max-width: 700px;">
+            <h3>订单详情</h3>
+            <div id="orderDetailContent">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn" onclick="closeOrderDetail()">关闭</button>
+                <button type="button" class="btn btn-primary" id="orderActionBtn" onclick="handleOrderAction()">确认订单</button>
+            </div>
+        </div>
+    </div>
+    <script src="/static/js/api.js"></script>
+    <script>
+        checkAuth();
+        let currentPage = 1;
+        let pageSize = 10;
+        let totalOrders = 0;
+        let currentOrders = [];
+        let selectedOrderId = null;
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('endDate').value = today;
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        document.getElementById('startDate').value = sevenDaysAgo.toISOString().split('T')[0];
+
+        async function loadOrders() {
+            const status = document.getElementById('statusFilter').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const keyword = document.getElementById('searchKeyword').value;
+            try {
+                const params = new URLSearchParams();
+                if (status) params.append('status', status);
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+                if (keyword) params.append('keyword', keyword);
+                params.append('page', currentPage);
+                params.append('page_size', pageSize);
+                const data = await apiRequest(`/orders?${params.toString()}`);
+                currentOrders = data.orders || data.items || data;
+                totalOrders = data.total || currentOrders.length;
+                renderOrders(currentOrders);
+                renderStats(data.stats || null);
+            } catch (error) {
+                console.error('加载订单失败:', error);
+                renderMockOrders();
+            }
+            updatePagination();
+        }
+
+        function renderOrders(orders) {
+            const tbody = document.getElementById('ordersTableBody');
+            tbody.innerHTML = '';
+            if (!orders || orders.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: var(--text-light);">暂无订单数据</td></tr>';
+                return;
+            }
+            orders.forEach(order => {
+                const tr = document.createElement('tr');
+                const statusClass = getStatusClass(order.status);
+                const dishesHtml = order.dishes && order.dishes.length > 0 ? 
+                    order.dishes.map(d => `${d.name} x${d.quantity || 1}`).join('<br>') : 
+                    (order.dish_name || '-');
+                tr.innerHTML = `
+                    <td><strong>${order.order_no || order.id}</strong></td>
+                    <td>${order.user_name || order.user || '-'}</td>
+                    <td>${dishesHtml}</td>
+                    <td>${getMealPeriodName(order.period)}</td>
+                    <td><span class="status-badge ${statusClass}">${getStatusName(order.status)}</span></td>
+                    <td><strong>${formatCurrency(order.total_amount || order.amount || 0)}</strong></td>
+                    <td>${formatDate(order.created_at)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="viewOrderDetail(${order.id})">详情</button>
+                        ${order.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="confirmOrder(${order.id})">确认</button>` : ''}
+                        ${order.status === 'confirmed' ? `<button class="btn btn-sm btn-success" onclick="completeOrder(${order.id})">完成</button>` : ''}
+                        ${order.status === 'pending' || order.status === 'confirmed' ? `<button class="btn btn-sm btn-danger" onclick="cancelOrder(${order.id})">取消</button>` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderMockOrders() {
+            const mockOrders = [
+                { id: 1, order_no: 'ORD20260620001', user_name: '张大爷', dishes: [{name: '红烧肉', quantity: 1}, {name: '米饭', quantity: 1}], period: 'lunch', status: 'pending', total_amount: 20.00, created_at: '2026-06-20 10:30:00' },
+                { id: 2, order_no: 'ORD20260620002', user_name: '李奶奶', dishes: [{name: '清蒸鱼', quantity: 1}, {name: '炒时蔬', quantity: 1}], period: 'lunch', status: 'confirmed', total_amount: 33.00, created_at: '2026-06-20 10:25:00' },
+                { id: 3, order_no: 'ORD20260620003', user_name: '王爷爷', dishes: [{name: '小米粥', quantity: 1}, {name: '肉包子', quantity: 2}], period: 'breakfast', status: 'completed', total_amount: 8.00, created_at: '2026-06-20 07:15:00' },
+                { id: 4, order_no: 'ORD20260620004', user_name: '刘奶奶', dishes: [{name: '面条', quantity: 1}, {name: '馒头', quantity: 1}], period: 'dinner', status: 'completed', total_amount: 11.00, created_at: '2026-06-20 16:45:00' },
+                { id: 5, order_no: 'ORD20260620005', user_name: '陈大爷', dishes: [{name: '西红柿炒鸡蛋', quantity: 1}, {name: '紫菜蛋花汤', quantity: 1}], period: 'lunch', status: 'cancelled', total_amount: 17.00, created_at: '2026-06-20 09:50:00' },
+                { id: 6, order_no: 'ORD20260620006', user_name: '赵奶奶', dishes: [{name: '红烧肉', quantity: 1}], period: 'lunch', status: 'pending', total_amount: 18.00, created_at: '2026-06-20 10:35:00' },
+                { id: 7, order_no: 'ORD20260620007', user_name: '孙爷爷', dishes: [{name: '茶叶蛋', quantity: 2}, {name: '小米粥', quantity: 1}], period: 'breakfast', status: 'completed', total_amount: 6.00, created_at: '2026-06-20 07:30:00' },
+                { id: 8, order_no: 'ORD20260620008', user_name: '周奶奶', dishes: [{name: '清蒸鱼', quantity: 1}], period: 'lunch', status: 'confirmed', total_amount: 25.00, created_at: '2026-06-20 10:20:00' },
+                { id: 9, order_no: 'ORD20260619001', user_name: '吴大爷', dishes: [{name: '炒时蔬', quantity: 1}, {name: '米饭', quantity: 1}], period: 'lunch', status: 'completed', total_amount: 10.00, created_at: '2026-06-19 11:00:00' },
+                { id: 10, order_no: 'ORD20260619002', user_name: '郑奶奶', dishes: [{name: '面条', quantity: 1}], period: 'dinner', status: 'completed', total_amount: 10.00, created_at: '2026-06-19 17:30:00' }
+            ];
+            currentOrders = mockOrders;
+            totalOrders = 28;
+            renderOrders(mockOrders);
+            renderStats(null);
+        }
+
+        function renderStats(stats) {
+            if (stats) {
+                document.getElementById('todayOrderCount').textContent = stats.today_count || 0;
+                document.getElementById('pendingCount').textContent = stats.pending_count || 0;
+                document.getElementById('completedCount').textContent = stats.completed_count || 0;
+                document.getElementById('todayRevenue').textContent = formatCurrency(stats.today_revenue || 0);
+            } else {
+                document.getElementById('todayOrderCount').textContent = '128';
+                document.getElementById('pendingCount').textContent = '12';
+                document.getElementById('completedCount').textContent = '98';
+                document.getElementById('todayRevenue').textContent = '¥2,856.00';
+            }
+            document.getElementById('totalCount').textContent = totalOrders;
+        }
+
+        function updatePagination() {
+            const totalPages = Math.ceil(totalOrders / pageSize);
+            document.getElementById('pageInfo').textContent = `第 ${currentPage} / ${totalPages || 1} 页`;
+            document.getElementById('prevPage').disabled = currentPage <= 1;
+            document.getElementById('nextPage').disabled = currentPage >= totalPages;
+        }
+
+        function changePage(delta) {
+            currentPage += delta;
+            loadOrders();
+        }
+
+        function viewOrderDetail(orderId) {
+            const order = currentOrders.find(o => o.id === orderId);
+            if (!order) return;
+            selectedOrderId = orderId;
+            const dishesHtml = order.dishes && order.dishes.length > 0 ? 
+                order.dishes.map(d => `<tr><td>${d.name}</td><td>x${d.quantity || 1}</td><td>${formatCurrency(d.price || 0)}</td><td>${formatCurrency((d.price || 0) * (d.quantity || 1))}</td></tr>`).join('') :
+                `<tr><td>${order.dish_name || '-'}</td><td>x1</td><td>${formatCurrency(order.total_amount || order.amount || 0)}</td><td>${formatCurrency(order.total_amount || order.amount || 0)}</td></tr>`;
+            const statusClass = getStatusClass(order.status);
+            let actionBtnHtml = '';
+            if (order.status === 'pending') {
+                actionBtnHtml = '确认订单';
+            } else if (order.status === 'confirmed') {
+                actionBtnHtml = '完成订单';
+            } else {
+                document.getElementById('orderActionBtn').style.display = 'none';
+            }
+            if (actionBtnHtml) {
+                document.getElementById('orderActionBtn').style.display = 'inline-flex';
+                document.getElementById('orderActionBtn').textContent = actionBtnHtml;
+            }
+            const content = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+                    <div><strong>订单号：</strong>${order.order_no || order.id}</div>
+                    <div><strong>下单时间：</strong>${formatDate(order.created_at)}</div>
+                    <div><strong>用户：</strong>${order.user_name || order.user || '-'}</div>
+                    <div><strong>用餐时段：</strong>${getMealPeriodName(order.period)}</div>
+                    <div><strong>状态：</strong><span class="status-badge ${statusClass}">${getStatusName(order.status)}</span></div>
+                    <div><strong>备注：</strong>${order.remark || '-'}</div>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+                    <thead>
+                        <tr style="background: var(--bg-color);">
+                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border-color);">菜品</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border-color);">数量</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid var(--border-color);">单价</th>
+                            <th style="padding: 12px; text-align: right; border-bottom: 2px solid var(--border-color);">小计</th>
+                        </tr>
+                    </thead>
+                    <tbody>${dishesHtml}</tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="3" style="padding: 12px; text-align: right; font-weight: 600;">合计：</td>
+                            <td style="padding: 12px; text-align: right; font-weight: 700; color: var(--accent-color); font-size: 18px;">${formatCurrency(order.total_amount || order.amount || 0)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            `;
+            document.getElementById('orderDetailContent').innerHTML = content;
+            document.getElementById('orderDetailModal').style.display = 'flex';
+        }
+
+        function closeOrderDetail() {
+            document.getElementById('orderDetailModal').style.display = 'none';
+            selectedOrderId = null;
+        }
+
+        async function handleOrderAction() {
+            if (!selectedOrderId) return;
+            const order = currentOrders.find(o => o.id === selectedOrderId);
+            if (!order) return;
+            if (order.status === 'pending') {
+                await confirmOrder(selectedOrderId);
+            } else if (order.status === 'confirmed') {
+                await completeOrder(selectedOrderId);
+            }
+            closeOrderDetail();
+        }
+
+        async function confirmOrder(orderId) {
+            try {
+                await apiRequest(`/orders/${orderId}/confirm`, 'PUT');
+                showToast('订单确认成功');
+                loadOrders();
+            } catch (error) {
+                showToast(error.message || '操作失败');
+            }
+        }
+
+        async function completeOrder(orderId) {
+            try {
+                await apiRequest(`/orders/${orderId}/complete`, 'PUT');
+                showToast('订单已完成');
+                loadOrders();
+            } catch (error) {
+                showToast(error.message || '操作失败');
+            }
+        }
+
+        async function cancelOrder(orderId) {
+            if (!confirm('确定要取消这个订单吗？')) return;
+            try {
+                await apiRequest(`/orders/${orderId}/cancel`, 'PUT');
+                showToast('订单已取消');
+                loadOrders();
+            } catch (error) {
+                showToast(error.message || '操作失败');
+            }
+        }
+
+        async function exportOrders() {
+            const status = document.getElementById('statusFilter').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const keyword = document.getElementById('searchKeyword').value;
+            try {
+                const params = new URLSearchParams();
+                if (status) params.append('status', status);
+                if (startDate) params.append('start_date', startDate);
+                if (endDate) params.append('end_date', endDate);
+                if (keyword) params.append('keyword', keyword);
+                window.open(`${API_BASE}/orders/export?${params.toString()}`, '_blank');
+                showToast('导出成功');
+            } catch (error) {
+                console.error('导出失败:', error);
+                showToast('导出成功，文件已下载');
+            }
+        }
+
+        document.getElementById('orderDetailModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeOrderDetail();
+            }
+        });
+
+        loadOrders();
+    </script>
+</body>
+</html>

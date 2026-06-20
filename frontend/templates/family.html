@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>老年食堂 - 亲属管理</title>
+    <link rel="stylesheet" href="/static/css/elderly.css">
+</head>
+<body>
+    <main class="container">
+        <header style="margin-bottom: 24px;">
+            <h1>我的亲属</h1>
+        </header>
+
+        <button id="addFamilyBtn" class="btn btn-primary btn-lg btn-block" style="margin-bottom: 24px;">
+            <span style="font-size: 36px; margin-right: 12px;">➕</span>
+            添加亲属
+        </button>
+
+        <section>
+            <h3 style="margin-bottom: 16px;">已绑定亲属</h3>
+            <div id="familyList">
+            </div>
+            <div id="emptyFamily" class="empty-state" style="display: none;">
+                <div class="empty-icon">👨‍👩‍👧</div>
+                <p class="empty-text">暂无绑定亲属</p>
+            </div>
+        </section>
+
+        <section style="margin-top: 40px;" id="pendingSection" style="display: none;">
+            <h3 style="margin-bottom: 16px;">待确认请求</h3>
+            <div id="pendingList">
+            </div>
+        </section>
+    </main>
+
+    <div id="addModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2 class="modal-title">添加亲属</h2>
+            
+            <div class="input-group">
+                <label for="familyPhone">亲属手机号码</label>
+                <input 
+                    type="tel" 
+                    id="familyPhone" 
+                    name="familyPhone" 
+                    placeholder="请输入11位手机号码" 
+                    maxlength="11"
+                    inputmode="numeric"
+                >
+            </div>
+
+            <div class="input-group">
+                <label for="relation">与您的关系</label>
+                <select id="relation" name="relation">
+                    <option value="">请选择关系</option>
+                    <option value="spouse">配偶</option>
+                    <option value="son">儿子</option>
+                    <option value="daughter">女儿</option>
+                    <option value="grandson">孙子</option>
+                    <option value="granddaughter">孙女</option>
+                    <option value="brother">兄弟</option>
+                    <option value="sister">姐妹</option>
+                    <option value="other">其他</option>
+                </select>
+            </div>
+
+            <div class="modal-actions">
+                <button id="cancelAddBtn" class="btn btn-outline btn-lg">取消</button>
+                <button id="confirmAddBtn" class="btn btn-primary btn-lg">确认添加</button>
+            </div>
+        </div>
+    </div>
+
+    <button id="voiceBtn" class="voice-btn">🎤</button>
+
+    <nav class="bottom-nav">
+        <a href="/" class="nav-item">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-label">首页</span>
+        </a>
+        <a href="/order" class="nav-item">
+            <span class="nav-icon">🍽️</span>
+            <span class="nav-label">点餐</span>
+        </a>
+        <a href="/orders" class="nav-item">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">订单</span>
+        </a>
+        <a href="/family" class="nav-item active">
+            <span class="nav-icon">👨‍👩‍👧</span>
+            <span class="nav-label">亲属</span>
+        </a>
+    </nav>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/voice.js"></script>
+    <script>
+        const relationNames = {
+            'spouse': '配偶',
+            'son': '儿子',
+            'daughter': '女儿',
+            'grandson': '孙子',
+            'granddaughter': '孙女',
+            'brother': '兄弟',
+            'sister': '姐妹',
+            'other': '其他'
+        };
+
+        function loadFamilyMembers() {
+            const familyListEl = document.getElementById('familyList');
+            const emptyFamily = document.getElementById('emptyFamily');
+            
+            familyListEl.innerHTML = '<div style="text-align: center; padding: 40px;"><span class="loading"></span><p style="margin-top: 16px;">加载中...</p></div>';
+            emptyFamily.style.display = 'none';
+
+            apiRequest('/family/members', 'GET')
+                .then(data => {
+                    const members = data.members || [];
+                    const pending = data.pending || [];
+
+                    if (members.length === 0) {
+                        familyListEl.innerHTML = '';
+                        emptyFamily.style.display = 'block';
+                    } else {
+                        familyListEl.innerHTML = members.map(member => renderFamilyMember(member)).join('');
+                        attachMemberEvents();
+                    }
+
+                    renderPendingRequests(pending);
+                })
+                .catch(error => {
+                    showToast(error.message);
+                    familyListEl.innerHTML = '';
+                    emptyFamily.style.display = 'block';
+                });
+        }
+
+        function renderFamilyMember(member) {
+            const relationName = relationNames[member.relation] || member.relation;
+            const nameInitial = member.name ? member.name.charAt(0) : '亲';
+
+            return `
+                <div class="family-member-card" data-member-id="${member.id}">
+                    <div class="member-avatar">${nameInitial}</div>
+                    <div class="member-info">
+                        <div class="member-name">${member.name || '未命名'}</div>
+                        <div class="member-relation">${relationName}</div>
+                        <div class="member-phone">${member.phone}</div>
+                    </div>
+                    <button class="btn btn-primary" style="min-height: 56px; font-size: 24px; padding: 12px 24px;" data-member-id="${member.id}" data-action="order">
+                        代订
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderPendingRequests(pending) {
+            const pendingSection = document.getElementById('pendingSection');
+            const pendingList = document.getElementById('pendingList');
+
+            if (!pending || pending.length === 0) {
+                pendingSection.style.display = 'none';
+                return;
+            }
+
+            pendingSection.style.display = 'block';
+            pendingList.innerHTML = pending.map(req => {
+                const relationName = relationNames[req.relation] || req.relation;
+                return `
+                    <div class="card" data-request-id="${req.id}">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div>
+                                <div style="font-size: 28px; font-weight: 600;">${req.from_user_name || '新请求'}</div>
+                                <div style="font-size: 22px; color: var(--text-secondary);">${relationName} · ${req.from_user_phone}</div>
+                            </div>
+                            <span class="status-badge status-pending">待确认</span>
+                        </div>
+                        <div style="display: flex; gap: 12px;">
+                            <button class="btn btn-outline" style="flex: 1; min-height: 56px;" data-request-id="${req.id}" data-action="reject">
+                                拒绝
+                            </button>
+                            <button class="btn btn-primary" style="flex: 1; min-height: 56px;" data-request-id="${req.id}" data-action="accept">
+                                接受
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            attachPendingEvents();
+        }
+
+        function attachMemberEvents() {
+            document.querySelectorAll('[data-action="order"]').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const memberId = this.dataset.memberId;
+                    localStorage.setItem('selectedFamilyMember', memberId);
+                    navigateTo('/family/order');
+                });
+            });
+        }
+
+        function attachPendingEvents() {
+            document.querySelectorAll('[data-action="accept"]').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const requestId = this.dataset.requestId;
+                    try {
+                        await apiRequest(`/family/requests/${requestId}/accept`, 'PUT');
+                        showToast('已接受亲属请求');
+                        loadFamilyMembers();
+                    } catch (error) {
+                        showToast(error.message);
+                    }
+                });
+            });
+
+            document.querySelectorAll('[data-action="reject"]').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const requestId = this.dataset.requestId;
+                    try {
+                        await apiRequest(`/family/requests/${requestId}/reject`, 'PUT');
+                        showToast('已拒绝亲属请求');
+                        loadFamilyMembers();
+                    } catch (error) {
+                        showToast(error.message);
+                    }
+                });
+            });
+        }
+
+        document.getElementById('addFamilyBtn').addEventListener('click', function() {
+            document.getElementById('addModal').style.display = 'flex';
+            document.getElementById('familyPhone').value = '';
+            document.getElementById('relation').value = '';
+        });
+
+        document.getElementById('cancelAddBtn').addEventListener('click', function() {
+            document.getElementById('addModal').style.display = 'none';
+        });
+
+        document.getElementById('confirmAddBtn').addEventListener('click', async function() {
+            const phone = document.getElementById('familyPhone').value.trim();
+            const relation = document.getElementById('relation').value;
+
+            if (!phone) {
+                showToast('请输入亲属手机号码');
+                return;
+            }
+
+            if (!/^1\d{10}$/.test(phone)) {
+                showToast('请输入正确的11位手机号码');
+                return;
+            }
+
+            if (!relation) {
+                showToast('请选择与亲属的关系');
+                return;
+            }
+
+            const confirmBtn = this;
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<span class="loading"></span> 发送中...';
+
+            try {
+                await apiRequest('/family/invite', 'POST', { phone, relation });
+                showToast('邀请已发送，请等待对方确认');
+                document.getElementById('addModal').style.display = 'none';
+                loadFamilyMembers();
+            } catch (error) {
+                showToast(error.message);
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = '确认添加';
+            }
+        });
+
+        document.getElementById('addModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.style.display = 'none';
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!checkAuth()) return;
+            
+            loadFamilyMembers();
+            initVoiceButton();
+        });
+    </script>
+</body>
+</html>
