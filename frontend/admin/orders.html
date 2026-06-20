@@ -14,10 +14,10 @@
                 <h2>🍽️ 老年食堂</h2>
             </div>
             <ul class="sidebar-menu">
-                <li><a href="dashboard.html"><span class="menu-icon">📊</span><span>仪表盘</span></a></li>
-                <li><a href="prediction.html"><span class="menu-icon">📈</span><span>备餐预测</span></a></li>
-                <li><a href="dishes.html"><span class="menu-icon">🍱</span><span>菜品管理</span></a></li>
-                <li><a href="orders.html" class="active"><span class="menu-icon">📋</span><span>订单管理</span></a></li>
+                <li><a href="/admin/dashboard"><span class="menu-icon">📊</span><span>仪表盘</span></a></li>
+                <li><a href="/admin/prediction"><span class="menu-icon">📈</span><span>备餐预测</span></a></li>
+                <li><a href="/admin/dishes"><span class="menu-icon">🍱</span><span>菜品管理</span></a></li>
+                <li><a href="/admin/orders" class="active"><span class="menu-icon">📋</span><span>订单管理</span></a></li>
                 <li><a href="#" onclick="logout()"><span class="menu-icon">🚪</span><span>退出登录</span></a></li>
             </ul>
         </aside>
@@ -115,7 +115,7 @@
     </div>
     <script src="/static/js/api.js"></script>
     <script>
-        checkAuth();
+        checkAdminAuth();
         let currentPage = 1;
         let pageSize = 10;
         let totalOrders = 0;
@@ -140,11 +140,11 @@
                 if (keyword) params.append('keyword', keyword);
                 params.append('page', currentPage);
                 params.append('page_size', pageSize);
-                const data = await apiRequest(`/orders?${params.toString()}`);
-                currentOrders = data.orders || data.items || data;
+                const data = await adminApiRequest(`/orders/all?${params.toString()}`);
+                currentOrders = data.orders || data.list || [];
                 totalOrders = data.total || currentOrders.length;
                 renderOrders(currentOrders);
-                renderStats(data.stats || null);
+                renderStats(null);
             } catch (error) {
                 console.error('加载订单失败:', error);
                 renderMockOrders();
@@ -162,16 +162,17 @@
             orders.forEach(order => {
                 const tr = document.createElement('tr');
                 const statusClass = getStatusClass(order.status);
-                const dishesHtml = order.dishes && order.dishes.length > 0 ? 
-                    order.dishes.map(d => `${d.name} x${d.quantity || 1}`).join('<br>') : 
-                    (order.dish_name || '-');
+                const dishesHtml = order.items && order.items.length > 0 ? 
+                    order.items.map(d => `${d.dish_name} x${d.quantity || 1}`).join('<br>') : 
+                    '-';
+                const userName = order.elderly_name || '-';
                 tr.innerHTML = `
                     <td><strong>${order.order_no || order.id}</strong></td>
-                    <td>${order.user_name || order.user || '-'}</td>
+                    <td>${userName}</td>
                     <td>${dishesHtml}</td>
-                    <td>${getMealPeriodName(order.period)}</td>
+                    <td>${getMealPeriodName(order.meal_period)}</td>
                     <td><span class="status-badge ${statusClass}">${getStatusName(order.status)}</span></td>
-                    <td><strong>${formatCurrency(order.total_amount || order.amount || 0)}</strong></td>
+                    <td><strong>${formatCurrency(order.total_amount || 0)}</strong></td>
                     <td>${formatDate(order.created_at)}</td>
                     <td>
                         <button class="btn btn-sm btn-primary" onclick="viewOrderDetail(${order.id})">详情</button>
@@ -186,19 +187,12 @@
 
         function renderMockOrders() {
             const mockOrders = [
-                { id: 1, order_no: 'ORD20260620001', user_name: '张大爷', dishes: [{name: '红烧肉', quantity: 1}, {name: '米饭', quantity: 1}], period: 'lunch', status: 'pending', total_amount: 20.00, created_at: '2026-06-20 10:30:00' },
-                { id: 2, order_no: 'ORD20260620002', user_name: '李奶奶', dishes: [{name: '清蒸鱼', quantity: 1}, {name: '炒时蔬', quantity: 1}], period: 'lunch', status: 'confirmed', total_amount: 33.00, created_at: '2026-06-20 10:25:00' },
-                { id: 3, order_no: 'ORD20260620003', user_name: '王爷爷', dishes: [{name: '小米粥', quantity: 1}, {name: '肉包子', quantity: 2}], period: 'breakfast', status: 'completed', total_amount: 8.00, created_at: '2026-06-20 07:15:00' },
-                { id: 4, order_no: 'ORD20260620004', user_name: '刘奶奶', dishes: [{name: '面条', quantity: 1}, {name: '馒头', quantity: 1}], period: 'dinner', status: 'completed', total_amount: 11.00, created_at: '2026-06-20 16:45:00' },
-                { id: 5, order_no: 'ORD20260620005', user_name: '陈大爷', dishes: [{name: '西红柿炒鸡蛋', quantity: 1}, {name: '紫菜蛋花汤', quantity: 1}], period: 'lunch', status: 'cancelled', total_amount: 17.00, created_at: '2026-06-20 09:50:00' },
-                { id: 6, order_no: 'ORD20260620006', user_name: '赵奶奶', dishes: [{name: '红烧肉', quantity: 1}], period: 'lunch', status: 'pending', total_amount: 18.00, created_at: '2026-06-20 10:35:00' },
-                { id: 7, order_no: 'ORD20260620007', user_name: '孙爷爷', dishes: [{name: '茶叶蛋', quantity: 2}, {name: '小米粥', quantity: 1}], period: 'breakfast', status: 'completed', total_amount: 6.00, created_at: '2026-06-20 07:30:00' },
-                { id: 8, order_no: 'ORD20260620008', user_name: '周奶奶', dishes: [{name: '清蒸鱼', quantity: 1}], period: 'lunch', status: 'confirmed', total_amount: 25.00, created_at: '2026-06-20 10:20:00' },
-                { id: 9, order_no: 'ORD20260619001', user_name: '吴大爷', dishes: [{name: '炒时蔬', quantity: 1}, {name: '米饭', quantity: 1}], period: 'lunch', status: 'completed', total_amount: 10.00, created_at: '2026-06-19 11:00:00' },
-                { id: 10, order_no: 'ORD20260619002', user_name: '郑奶奶', dishes: [{name: '面条', quantity: 1}], period: 'dinner', status: 'completed', total_amount: 10.00, created_at: '2026-06-19 17:30:00' }
+                { id: 1, order_no: 'ORD20260620001', elderly_name: '张大爷', items: [{dish_name: '红烧肉', quantity: 1, unit_price: 18}, {dish_name: '米饭', quantity: 1, unit_price: 1}], meal_period: 'lunch', status: 'pending', total_amount: 19.00, created_at: '2026-06-20 10:30:00' },
+                { id: 2, order_no: 'ORD20260620002', elderly_name: '李奶奶', items: [{dish_name: '清蒸鱼', quantity: 1, unit_price: 22}, {dish_name: '清炒时蔬', quantity: 1, unit_price: 8}], meal_period: 'lunch', status: 'confirmed', total_amount: 30.00, created_at: '2026-06-20 10:25:00' },
+                { id: 3, order_no: 'ORD20260620003', elderly_name: '王爷爷', items: [{dish_name: '小米粥', quantity: 1, unit_price: 2}, {dish_name: '鲜肉包子', quantity: 2, unit_price: 3}], meal_period: 'breakfast', status: 'completed', total_amount: 8.00, created_at: '2026-06-20 07:15:00' },
             ];
             currentOrders = mockOrders;
-            totalOrders = 28;
+            totalOrders = 10;
             renderOrders(mockOrders);
             renderStats(null);
         }
@@ -210,10 +204,13 @@
                 document.getElementById('completedCount').textContent = stats.completed_count || 0;
                 document.getElementById('todayRevenue').textContent = formatCurrency(stats.today_revenue || 0);
             } else {
-                document.getElementById('todayOrderCount').textContent = '128';
-                document.getElementById('pendingCount').textContent = '12';
-                document.getElementById('completedCount').textContent = '98';
-                document.getElementById('todayRevenue').textContent = '¥2,856.00';
+                const pending = currentOrders.filter(o => o.status === 'pending').length;
+                const completed = currentOrders.filter(o => o.status === 'completed').length;
+                const revenue = currentOrders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + parseFloat(o.total_amount || 0), 0);
+                document.getElementById('todayOrderCount').textContent = currentOrders.length || '0';
+                document.getElementById('pendingCount').textContent = pending || '0';
+                document.getElementById('completedCount').textContent = completed || '0';
+                document.getElementById('todayRevenue').textContent = formatCurrency(revenue || 0);
             }
             document.getElementById('totalCount').textContent = totalOrders;
         }
@@ -234,9 +231,9 @@
             const order = currentOrders.find(o => o.id === orderId);
             if (!order) return;
             selectedOrderId = orderId;
-            const dishesHtml = order.dishes && order.dishes.length > 0 ? 
-                order.dishes.map(d => `<tr><td>${d.name}</td><td>x${d.quantity || 1}</td><td>${formatCurrency(d.price || 0)}</td><td>${formatCurrency((d.price || 0) * (d.quantity || 1))}</td></tr>`).join('') :
-                `<tr><td>${order.dish_name || '-'}</td><td>x1</td><td>${formatCurrency(order.total_amount || order.amount || 0)}</td><td>${formatCurrency(order.total_amount || order.amount || 0)}</td></tr>`;
+            const dishesHtml = order.items && order.items.length > 0 ? 
+                order.items.map(d => `<tr><td>${d.dish_name}</td><td>x${d.quantity || 1}</td><td>${formatCurrency(d.unit_price || d.price || 0)}</td><td>${formatCurrency(d.subtotal || ((d.unit_price || d.price || 0) * (d.quantity || 1)))}</td></tr>`).join('') :
+                `<tr><td>-</td><td>-</td><td>-</td><td>-</td></tr>`;
             const statusClass = getStatusClass(order.status);
             let actionBtnHtml = '';
             if (order.status === 'pending') {
@@ -250,12 +247,15 @@
                 document.getElementById('orderActionBtn').style.display = 'inline-flex';
                 document.getElementById('orderActionBtn').textContent = actionBtnHtml;
             }
+            const diningType = (order.dining_type === 'takeout' || order.dining_type === 'take_out') ? '外带' : '堂食';
             const content = `
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
                     <div><strong>订单号：</strong>${order.order_no || order.id}</div>
                     <div><strong>下单时间：</strong>${formatDate(order.created_at)}</div>
-                    <div><strong>用户：</strong>${order.user_name || order.user || '-'}</div>
-                    <div><strong>用餐时段：</strong>${getMealPeriodName(order.period)}</div>
+                    <div><strong>用户：</strong>${order.elderly_name || '-'}</div>
+                    <div><strong>用餐时段：</strong>${getMealPeriodName(order.meal_period)}</div>
+                    <div><strong>配送方式：</strong>${diningType}</div>
+                    <div><strong>取餐码：</strong>${order.pickup_code || '-'}</div>
                     <div><strong>状态：</strong><span class="status-badge ${statusClass}">${getStatusName(order.status)}</span></div>
                     <div><strong>备注：</strong>${order.remark || '-'}</div>
                 </div>
@@ -272,7 +272,7 @@
                     <tfoot>
                         <tr>
                             <td colspan="3" style="padding: 12px; text-align: right; font-weight: 600;">合计：</td>
-                            <td style="padding: 12px; text-align: right; font-weight: 700; color: var(--accent-color); font-size: 18px;">${formatCurrency(order.total_amount || order.amount || 0)}</td>
+                            <td style="padding: 12px; text-align: right; font-weight: 700; color: var(--accent-color); font-size: 18px;">${formatCurrency(order.total_amount || 0)}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -300,7 +300,7 @@
 
         async function confirmOrder(orderId) {
             try {
-                await apiRequest(`/orders/${orderId}/confirm`, 'PUT');
+                await adminApiRequest(`/orders/${orderId}/status?status=confirmed`, 'PUT');
                 showToast('订单确认成功');
                 loadOrders();
             } catch (error) {
@@ -310,7 +310,7 @@
 
         async function completeOrder(orderId) {
             try {
-                await apiRequest(`/orders/${orderId}/complete`, 'PUT');
+                await adminApiRequest(`/orders/${orderId}/status?status=completed`, 'PUT');
                 showToast('订单已完成');
                 loadOrders();
             } catch (error) {
@@ -321,7 +321,7 @@
         async function cancelOrder(orderId) {
             if (!confirm('确定要取消这个订单吗？')) return;
             try {
-                await apiRequest(`/orders/${orderId}/cancel`, 'PUT');
+                await adminApiRequest(`/orders/${orderId}/cancel`, 'PUT');
                 showToast('订单已取消');
                 loadOrders();
             } catch (error) {
@@ -329,32 +329,29 @@
             }
         }
 
-        async function exportOrders() {
-            const status = document.getElementById('statusFilter').value;
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            const keyword = document.getElementById('searchKeyword').value;
-            try {
-                const params = new URLSearchParams();
-                if (status) params.append('status', status);
-                if (startDate) params.append('start_date', startDate);
-                if (endDate) params.append('end_date', endDate);
-                if (keyword) params.append('keyword', keyword);
-                window.open(`${API_BASE}/orders/export?${params.toString()}`, '_blank');
-                showToast('导出成功');
-            } catch (error) {
-                console.error('导出失败:', error);
-                showToast('导出成功，文件已下载');
-            }
+        function exportOrders() {
+            showToast('导出功能开发中...');
         }
+
+        function logout() {
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_info');
+            showToast('已退出登录');
+            setTimeout(() => {
+                window.location.href = '/admin/login';
+            }, 1000);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!checkAdminAuth()) return;
+            loadOrders();
+        });
 
         document.getElementById('orderDetailModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeOrderDetail();
             }
         });
-
-        loadOrders();
     </script>
 </body>
 </html>
