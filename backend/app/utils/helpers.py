@@ -1,5 +1,6 @@
 import random
 import string
+import uuid
 from datetime import datetime, date
 from typing import Optional
 
@@ -11,12 +12,18 @@ def generate_pickup_code() -> str:
     return f"{letter}{numbers}"
 
 
+_order_counter = 0
+
+
 def generate_order_no() -> str:
+    global _order_counter
+    _order_counter += 1
     now = datetime.now()
     date_str = now.strftime("%Y%m%d")
     time_str = now.strftime("%H%M%S")
-    random_str = ''.join(random.choices(string.digits, k=4))
-    return f"ORD{date_str}{time_str}{random_str}"
+    counter_str = f"{_order_counter:06d}"
+    random_str = ''.join(random.choices(string.digits, k=2))
+    return f"ORD{date_str}{time_str}{counter_str}{random_str}"
 
 
 def get_pickup_time(meal_period: str) -> str:
