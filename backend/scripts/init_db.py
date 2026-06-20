@@ -61,41 +61,41 @@ def init_database():
         db.flush()
         
         breakfast_dishes = [
-            {"name": "鲜肉包子", "price": Decimal("3.00"), "nutrition": {"calories": 250, "protein": 8}},
-            {"name": "小米粥", "price": Decimal("2.00"), "nutrition": {"calories": 100, "protein": 2}},
-            {"name": "茶叶蛋", "price": Decimal("1.50"), "nutrition": {"calories": 150, "protein": 12}},
-            {"name": "豆浆", "price": Decimal("2.00"), "nutrition": {"calories": 80, "protein": 4}},
-            {"name": "油条", "price": Decimal("2.00"), "nutrition": {"calories": 300, "protein": 5}},
-            {"name": "咸菜", "price": Decimal("1.00"), "nutrition": {"calories": 30, "protein": 1}},
+            {"name": "鲜肉包子", "price": Decimal("3.00"), "nutrition_info": {"calories": 250, "protein": 8}},
+            {"name": "小米粥", "price": Decimal("2.00"), "nutrition_info": {"calories": 100, "protein": 2}},
+            {"name": "茶叶蛋", "price": Decimal("1.50"), "nutrition_info": {"calories": 150, "protein": 12}},
+            {"name": "豆浆", "price": Decimal("2.00"), "nutrition_info": {"calories": 80, "protein": 4}},
+            {"name": "油条", "price": Decimal("2.00"), "nutrition_info": {"calories": 300, "protein": 5}},
+            {"name": "咸菜", "price": Decimal("1.00"), "nutrition_info": {"calories": 30, "protein": 1}},
         ]
         
         lunch_dishes = [
-            {"name": "红烧肉", "price": Decimal("18.00"), "nutrition": {"calories": 450, "protein": 25}, "suitable": ["普通"]},
-            {"name": "鱼香肉丝", "price": Decimal("15.00"), "nutrition": {"calories": 350, "protein": 20}, "suitable": ["普通"]},
-            {"name": "清炒时蔬", "price": Decimal("8.00"), "nutrition": {"calories": 100, "protein": 3}, "suitable": ["高血压", "糖尿病"]},
-            {"name": "西红柿炒蛋", "price": Decimal("10.00"), "nutrition": {"calories": 200, "protein": 12}, "suitable": ["普通"]},
-            {"name": "清蒸鱼", "price": Decimal("22.00"), "nutrition": {"calories": 280, "protein": 30}, "suitable": ["高血压", "糖尿病"]},
-            {"name": "米饭", "price": Decimal("1.00"), "nutrition": {"calories": 130, "protein": 3}},
-            {"name": "馒头", "price": Decimal("0.50"), "nutrition": {"calories": 110, "protein": 4}},
-            {"name": "紫菜蛋花汤", "price": Decimal("3.00"), "nutrition": {"calories": 50, "protein": 3}},
+            {"name": "红烧肉", "price": Decimal("18.00"), "nutrition_info": {"calories": 450, "protein": 25}, "suitable_for": ["普通"]},
+            {"name": "鱼香肉丝", "price": Decimal("15.00"), "nutrition_info": {"calories": 350, "protein": 20}, "suitable_for": ["普通"]},
+            {"name": "清炒时蔬", "price": Decimal("8.00"), "nutrition_info": {"calories": 100, "protein": 3}, "suitable_for": ["高血压", "糖尿病"]},
+            {"name": "西红柿炒蛋", "price": Decimal("10.00"), "nutrition_info": {"calories": 200, "protein": 12}, "suitable_for": ["普通"]},
+            {"name": "清蒸鱼", "price": Decimal("22.00"), "nutrition_info": {"calories": 280, "protein": 30}, "suitable_for": ["高血压", "糖尿病"]},
+            {"name": "米饭", "price": Decimal("1.00"), "nutrition_info": {"calories": 130, "protein": 3}},
+            {"name": "馒头", "price": Decimal("0.50"), "nutrition_info": {"calories": 110, "protein": 4}},
+            {"name": "紫菜蛋花汤", "price": Decimal("3.00"), "nutrition_info": {"calories": 50, "protein": 3}},
         ]
         
         dinner_dishes = [
-            {"name": "小米粥", "price": Decimal("2.00"), "nutrition": {"calories": 100, "protein": 2}},
-            {"name": "包子", "price": Decimal("3.00"), "nutrition": {"calories": 250, "protein": 8}},
-            {"name": "凉拌黄瓜", "price": Decimal("6.00"), "nutrition": {"calories": 50, "protein": 2}, "suitable": ["高血压", "糖尿病"]},
-            {"name": "炒土豆丝", "price": Decimal("8.00"), "nutrition": {"calories": 180, "protein": 3}, "suitable": ["普通"]},
-            {"name": "炖豆腐", "price": Decimal("10.00"), "nutrition": {"calories": 150, "protein": 15}, "suitable": ["高血压", "糖尿病"]},
-            {"name": "玉米粥", "price": Decimal("2.00"), "nutrition": {"calories": 90, "protein": 3}},
+            {"name": "小米粥", "price": Decimal("2.00"), "nutrition_info": {"calories": 100, "protein": 2}},
+            {"name": "包子", "price": Decimal("3.00"), "nutrition_info": {"calories": 250, "protein": 8}},
+            {"name": "凉拌黄瓜", "price": Decimal("6.00"), "nutrition_info": {"calories": 50, "protein": 2}, "suitable_for": ["高血压", "糖尿病"]},
+            {"name": "炒土豆丝", "price": Decimal("8.00"), "nutrition_info": {"calories": 180, "protein": 3}, "suitable_for": ["普通"]},
+            {"name": "炖豆腐", "price": Decimal("10.00"), "nutrition_info": {"calories": 150, "protein": 15}, "suitable_for": ["高血压", "糖尿病"]},
+            {"name": "玉米粥", "price": Decimal("2.00"), "nutrition_info": {"calories": 90, "protein": 3}},
         ]
         
         all_dishes = []
         for d in breakfast_dishes:
-            all_dishes.append(Dish(**d, category="breakfast", status="on", stock=100, suitable_for=d.get("suitable")))
+            all_dishes.append(Dish(**d, category="breakfast", status="on", stock=100))
         for d in lunch_dishes:
-            all_dishes.append(Dish(**d, category="lunch", status="on", stock=100, suitable_for=d.get("suitable")))
+            all_dishes.append(Dish(**d, category="lunch", status="on", stock=100))
         for d in dinner_dishes:
-            all_dishes.append(Dish(**d, category="dinner", status="on", stock=100, suitable_for=d.get("suitable")))
+            all_dishes.append(Dish(**d, category="dinner", status="on", stock=100))
         
         db.add_all(all_dishes)
         db.flush()
